@@ -46,6 +46,7 @@ jobs:
       - name: Lint Code Base
         uses: github/super-linter/slim@v4
         env:
+          FILTER_REGEX_EXCLUDE: src/app/static/css/main.css|src/app/server.js
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LINTER_RULES_PATH: .
           VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
