@@ -219,22 +219,23 @@ jobs:
       # Prisma Cloud Scanner
       #########################
 
-      - name: Prisma Cloud - scan container image
-        if: always() && steps.build-push-action.outcome == 'success'
-        id: prisma-cloud-scan
-        uses: PaloAltoNetworks/prisma-cloud-scan@v1
-        continue-on-error: ${{ ! inputs.container_image_vulnerability_checks || false }}
-        with:
-          pcc_console_url: ${{ env.PCC_CONSOLE_URL }}
-          pcc_user: ${{ env.PCC_USER }}
-          pcc_pass: ${{ env.PCC_PASS }}
-          image_name: ${{ env.CONTAINER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
+      # - name: Prisma Cloud - scan container image
+      #   if: always() && steps.build-push-action.outcome == 'success'
+      #   id: prisma-cloud-scan
+      #   uses: PaloAltoNetworks/prisma-cloud-scan@v1
+      #   continue-on-error: ${{ ! inputs.container_image_vulnerability_checks || false }}
+      #   with:
+      #     pcc_console_url: ${{ env.PCC_CONSOLE_URL }}
+      #     pcc_user: ${{ env.PCC_USER }}
+      #     pcc_pass: ${{ env.PCC_PASS }}
+      #     image_name: ${{ env.CONTAINER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
 
-      - name: Prisma Cloud - upload SARIF file
-        if: always() && steps.build-push-action.outcome == 'success'
-        uses: github/codeql-action/upload-sarif@v1
-        with:
-          sarif_file: ${{ steps.prisma-cloud-scan.outputs.sarif_file }}
+      # - name: Prisma Cloud - upload SARIF file
+      #   if: always() && steps.build-push-action.outcome == 'success'
+      #   uses: github/codeql-action/upload-sarif@v1
+      #   continue-on-error: ${{ ! inputs.container_image_vulnerability_checks || false }}
+      #   with:
+      #     sarif_file: ${{ steps.prisma-cloud-scan.outputs.sarif_file }}
 
       #########################
       # Wiz Scanner
