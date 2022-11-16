@@ -4,31 +4,44 @@ on:
   workflow_dispatch:
     inputs:
       container_registry_push:
-        description: "Should push the image to Container Registry"
+        description: "Push the image to Container Registry"
         type: boolean
         required: true
         default: false
+      container_image_vulnerability_checks:
+        description: "Scan image for vulnerability issues"
+        type: boolean
+        required: true
+        default: true
+      container_image_expires_after:
+        description: "Expires after (days) [or 'Never']"
+        type: string
+        required: false
+        default: "30"
+
   push:
     tags:
       # For code tagging you can use 'v' prefix, but 'v' prefix should not be part of container tag
       - "v[0-9]+.[0-9]+.[0-9]+*"
   schedule:
-    - cron: "0 0 1 * *"
+    - cron: "0 0 * * 1"
 
 env:
-  # DOCKERFILE_LOCATION: src/app/Dockerfile
+  DOCKERFILE_LOCATION: src/app/Dockerfile
   # DOCKERFILE_LOCATION: src/app/Dockerfile-node-16.18.0-alpine3.16
-  DOCKERFILE_LOCATION: src/app/Dockerfile-node-16.18.0-bullseye-slim
+  # DOCKERFILE_LOCATION: src/app/Dockerfile-node-16.18.0-bullseye-slim
   # DOCKERFILE_LOCATION: src/app/Dockerfile-ubi9-nodejs-16-minimal
   # Container image destination - with registry and without tags
   CONTAINER_IMAGE: quay.io/petr_ruzicka/myc-hello-kubernetes
   CONTAINER_REGISTRY_USER: ${{ secrets.CONTAINER_REGISTRY_USER }}
   CONTAINER_REGISTRY_PASSWORD: ${{ secrets.CONTAINER_REGISTRY_PASSWORD }}
-  IMAGE_PRODUCT_ID: 12345
-  IMAGE_LICENSES: Apache-2.0
-  IMAGE_VENDOR: MyCompany
-  IMAGE_AUTHORS: petr.ruzicka@gmail.com
-  IMAGE_REPOSITORY_URL: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
+  CONTAINER_IMAGE_PRODUCT_ID: 12345
+  CONTAINER_IMAGE_LICENSES: Apache-2.0
+  CONTAINER_IMAGE_VENDOR: MyCompany
+  CONTAINER_IMAGE_AUTHORS: petr.ruzicka@gmail.com
+  CONTAINER_IMAGE_REPOSITORY_URL: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
+  CONTAINER_IMAGE_EXPIRES_AFTER: 365 # days
+  # renovate: datasource=github-tags depName=goodwithtech/dockle
   DOCKLE_VERSION: 0.4.9
   # Prisma cloud credentials
   PCC_CONSOLE_URL: ${{ secrets.PCC_CONSOLE_URL }}
@@ -46,6 +59,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      packages: write
       security-events: write
     steps:
       - name: Checkout
@@ -90,22 +104,36 @@ jobs:
           # Add 'docker.io' to base container images which are missing it
           echo "${BASE_IMAGE}" | grep -E '[^.]+\..+:' || BASE_IMAGE="docker.io/${BASE_IMAGE}"
           echo "BASE_IMAGE=${BASE_IMAGE}" | tee -a "${GITHUB_OUTPUT}"
-          BASE_IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${BASE_IMAGE}" | cut -d @ -f 2)
-          echo "BASE_IMAGE_DIGEST=${BASE_IMAGE_DIGEST}" | tee -a "${GITHUB_OUTPUT}"
+          BASE_CONTAINER_IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${BASE_IMAGE}" | cut -d @ -f 2)
+          echo "BASE_CONTAINER_IMAGE_DIGEST=${BASE_CONTAINER_IMAGE_DIGEST}" | tee -a "${GITHUB_OUTPUT}"
+
+          # Set variables for com.mycompany.image.expires.after and com.mycompany.image.expires
+          if [[ ${{ inputs.container_image_expires_after || env.CONTAINER_IMAGE_EXPIRES_AFTER }} = 'Never' ]]; then
+            echo "IMAGE_EXPIRES=Never" | tee -a "${GITHUB_OUTPUT}"
+            echo "IMAGE_EXPIRES_AFTER=Never" | tee -a "${GITHUB_OUTPUT}"
+          else
+            echo "IMAGE_EXPIRES=$(date -u --date='+${{ inputs.container_image_expires_after || env.CONTAINER_IMAGE_EXPIRES_AFTER }} days' +'%FT%TZ')" | tee -a "${GITHUB_OUTPUT}"
+            echo "IMAGE_EXPIRES_AFTER=${{ inputs.container_image_expires_after || env.CONTAINER_IMAGE_EXPIRES_AFTER }}d" | tee -a "${GITHUB_OUTPUT}"
+          fi
 
       - name: Docker meta
         id: docker_meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.CONTAINER_IMAGE }}
+          images: |
+            ${{ env.CONTAINER_IMAGE }}
+            ghcr.io/${{ github.repository_owner }}/${{ steps.variables.outputs.CONTAINER_NAME }}
           tags: |
-            type=raw,value=latest
+            # Whever the pipeline runs form "main" - use "latest" container tag
+            type=raw,value=latest,enable={{ is_default_branch }}
             type=semver,pattern={{version}},event=tag
             type=semver,pattern={{major}}.{{minor}},event=tag
-            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }},event=tag
+            type=semver,pattern={{major}},event=tag,enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+            # When the pipeline is not excuted form 'main' branch use "pr-<mybranch>" tag
+            type=ref,prefix=br-,event=branch,enable=${{ github.ref_name != github.event.repository.default_branch }}
           labels: |
             # org.opencontainers.image.created - it is there by default
-            org.opencontainers.image.authors=${{ env.IMAGE_AUTHORS }}
+            org.opencontainers.image.authors=${{ env.CONTAINER_IMAGE_AUTHORS }}
             # org.opencontainers.image.description - it is there by default (repository description)
             org.opencontainers.image.documentation=${{ github.event.repository.html_url }}/blob/${{ github.sha }}/README.md
             # org.opencontainers.image.revision - it is there by default
@@ -113,17 +141,19 @@ jobs:
             # org.opencontainers.image.title - it is there by default
             # org.opencontainers.image.url - it is there by default
             # org.opencontainers.image.version - it is there by default
-            org.opencontainers.image.vendor=${{ env.IMAGE_VENDOR }}
-            org.opencontainers.image.licenses=${{ env.IMAGE_LICENSES }}
+            org.opencontainers.image.vendor=${{ env.CONTAINER_IMAGE_VENDOR }}
+            org.opencontainers.image.licenses=${{ env.CONTAINER_IMAGE_LICENSES }}
             org.opencontainers.image.ref.name=${{ github.ref_name }}
-            org.opencontainers.image.base.digest=${{ steps.variables.outputs.BASE_IMAGE_DIGEST }}
+            org.opencontainers.image.base.digest=${{ steps.variables.outputs.BASE_CONTAINER_IMAGE_DIGEST }}
             org.opencontainers.image.base.name=${{ steps.variables.outputs.BASE_IMAGE }}
             com.mycompany.image.pipeline.url=${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}
             com.mycompany.image.pipeline.source=${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}/workflow
-            com.mycompany.image.product_id=${{ env.IMAGE_PRODUCT_ID }}
-            com.mycompany.image.repository.url=${{ env.IMAGE_REPOSITORY_URL }}
+            com.mycompany.image.product_id=${{ env.CONTAINER_IMAGE_PRODUCT_ID }}
+            com.mycompany.image.repository.url=${{ env.CONTAINER_IMAGE_REPOSITORY_URL }}
             com.mycompany.image.used_for=all
-            quay.expires-after=365d
+            com.mycompany.image.expires=${{ steps.variables.outputs.IMAGE_EXPIRES }}
+            com.mycompany.image.expires.after=${{ steps.variables.outputs.IMAGE_EXPIRES_AFTER }}
+            quay.expires-after=${{ steps.variables.outputs.IMAGE_EXPIRES_AFTER }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -141,50 +171,25 @@ jobs:
       # Trivy Scanner
       #########################
 
-      - name: Trivy Scan Image - sarif
+      - name: Trivy - scan container image
         uses: aquasecurity/trivy-action@master
-        continue-on-error: true
+        if: always() && steps.build-push-action.outcome == 'success'
+        continue-on-error: ${{ ! inputs.container_image_vulnerability_checks || false }}
         with:
           image-ref: ${{ env.CONTAINER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
-          format: "sarif"
-          output: "trivy-results.sarif"
           exit-code: 1
           ignore-unfixed: true
           severity: CRITICAL
-
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: "trivy-results.sarif"
-
-      - name: Trivy Scan Image - table
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
-        with:
-          image-ref: ${{ env.CONTAINER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
-          exit-code: 1
-          ignore-unfixed: true
 
       #########################
       # Anchore - Grype
       #########################
 
-      - name: Grype Scan image - sarif
-        id: anchore-scan
+      - name: Grype - scan container image
         uses: anchore/scan-action@v3
-        continue-on-error: true
-        with:
-          severity-cutoff: critical
-          image: ${{ env.CONTAINER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
-
-      - name: Upload Anchore scan SARIF report
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: ${{ steps.anchore-scan.outputs.sarif }}
-
-      - name: Grype Scan image - table
-        uses: anchore/scan-action@v3
-        continue-on-error: true
+        # Continue whenever container was built (no matter if previous scanner failed)
+        if: always() && steps.build-push-action.outcome == 'success'
+        continue-on-error: ${{ ! inputs.container_image_vulnerability_checks || false }}
         with:
           image: ${{ env.CONTAINER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
           severity-cutoff: critical
@@ -194,17 +199,19 @@ jobs:
       # Snyk Scanner
       #########################
 
-      - name: Run Snyk to check Docker image for vulnerabilities
+      - name: Snyk - scan container image
         uses: snyk/actions/docker@master
-        continue-on-error: true
+        if: always() && steps.build-push-action.outcome == 'success'
+        continue-on-error: ${{ ! inputs.container_image_vulnerability_checks || false }}
         env:
           SNYK_TOKEN: ${{ env.SNYK_TOKEN }}
         with:
           image: ${{ env.CONTAINER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
           args: --file=${{ env.DOCKERFILE_LOCATION }} --severity-threshold=high
 
-      - name: Upload result to GitHub Code Scanning
+      - name: Snyk - upload SARIF file
         uses: github/codeql-action/upload-sarif@v2
+        if: always() && steps.build-push-action.outcome == 'success'
         with:
           sarif_file: snyk.sarif
 
@@ -212,19 +219,20 @@ jobs:
       # Prisma Cloud Scanner
       #########################
 
-      - name: Prisma Cloud image scan
+      - name: Prisma Cloud - scan container image
+        if: always() && steps.build-push-action.outcome == 'success'
         id: prisma-cloud-scan
         uses: PaloAltoNetworks/prisma-cloud-scan@v1
-        continue-on-error: true
+        continue-on-error: ${{ ! inputs.container_image_vulnerability_checks || false }}
         with:
           pcc_console_url: ${{ env.PCC_CONSOLE_URL }}
           pcc_user: ${{ env.PCC_USER }}
           pcc_pass: ${{ env.PCC_PASS }}
           image_name: ${{ env.CONTAINER_IMAGE }}:${{ steps.docker_meta.outputs.version }}
 
-      - name: Upload SARIF file
-        if: ${{ always() }}
-        uses: github/codeql-action/upload-sarif@v2
+      - name: Prisma Cloud - upload SARIF file
+        if: always() && steps.build-push-action.outcome == 'success'
+        uses: github/codeql-action/upload-sarif@v1
         with:
           sarif_file: ${{ steps.prisma-cloud-scan.outputs.sarif_file }}
 
@@ -232,8 +240,9 @@ jobs:
       # Wiz Scanner
       #########################
 
-      - name: Wiz Scan image
-        continue-on-error: true
+      - name: Wiz - scan container image
+        if: always() && steps.build-push-action.outcome == 'success'
+        continue-on-error: ${{ ! inputs.container_image_vulnerability_checks || false }}
         env:
           WIZ_CLIENT_ID: ${{ env.WIZ_CLIENT_ID }}
           WIZ_CLIENT_SECRET: ${{ env.WIZ_CLIENT_SECRET }}
@@ -241,18 +250,20 @@ jobs:
           set -euxo pipefail
           curl -s -o wizcli https://wizcli.app.wiz.io/wizcli && chmod +x wizcli
           ./wizcli auth --id "$WIZ_CLIENT_ID" --secret "$WIZ_CLIENT_SECRET"
-          ./wizcli docker scan --image "${{ env.CONTAINER_IMAGE }}:${{ steps.docker_meta.outputs.version }}" --tag product_id="${{ env.IMAGE_PRODUCT_ID }}" --policy "ruzickap-test-vulnerability-policy"
+          ./wizcli docker scan --image "${{ env.CONTAINER_IMAGE }}:${{ steps.docker_meta.outputs.version }}" --tag product_id="${{ env.CONTAINER_IMAGE_PRODUCT_ID }}"
 
       #########################
       # Dockle
       #########################
 
-      - name: Dockle Scan image
+      - name: Dockle - scan container image
+        if: always() && steps.build-push-action.outcome == 'success'
+        continue-on-error: ${{ ! inputs.container_image_vulnerability_checks || false }}
         run: |
           set -euxo pipefail
           curl -sL -o dockle.deb https://github.com/goodwithtech/dockle/releases/download/v${{ env.DOCKLE_VERSION }}/dockle_${{ env.DOCKLE_VERSION }}_Linux-64bit.deb
           sudo dpkg -i ./dockle.deb
-          dockle "${{ env.CONTAINER_IMAGE }}:${{ steps.docker_meta.outputs.version }}"
+          dockle --exit-code 1 "${{ env.CONTAINER_IMAGE }}:${{ steps.docker_meta.outputs.version }}"
 
       #########################
       # SBOM
@@ -269,6 +280,14 @@ jobs:
           registry: ${{ steps.variables.outputs.CONTAINER_REGISTRY }}
           username: ${{ env.CONTAINER_REGISTRY_USER }}
           password: ${{ env.CONTAINER_REGISTRY_PASSWORD }}
+
+      - name: Login to ghcr.io
+        if: inputs.container_registry_push || startsWith(github.ref, 'refs/tags/') || github.event_name == 'schedule'
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push image to container registry
         if: inputs.container_registry_push || startsWith(github.ref, 'refs/tags/') || github.event_name == 'schedule'
@@ -293,22 +312,10 @@ jobs:
       #     TAGS: ${{ steps.docker_meta.outputs.tags }}
       #     COSIGN_EXPERIMENTAL: true
 
-      # - name: Create Release Notes
-      #   if: startsWith(github.ref, 'refs/tags/')
-      #   uses: actions/github-script@v6
-      #   with:
-      #     github-token: ${{ secrets.GITHUB_TOKEN }}
-      #     script: |
-      #       try {
-      #         await github.rest.repos.createRelease({
-      #           draft: false,
-      #           generate_release_notes: true,
-      #           name: "${{ steps.docker_meta.outputs.version }}",
-      #           owner: context.repo.owner,
-      #           prerelease: false,
-      #           repo: context.repo.repo,
-      #           tag_name: "${{ steps.docker_meta.outputs.version }}",
-      #         });
-      #       } catch (error) {
-      #         core.setFailed(error.message);
-      #       }
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euxo pipefail
+          gh release create ${{ github.ref_name }} --generate-notes
