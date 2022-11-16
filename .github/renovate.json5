@@ -1,6 +1,15 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "branchPrefix": "renovate/",
+  "ignorePaths": [
+    // Keep original Dockerfile untouched
+    "src/app/Dockerfile",
+    // Keep original application + dependencies untouched
+    "src/app/package.json",
+    // Disable updates due to Node LTS versions issue: https://github.com/renovatebot/renovate/issues/5990
+    "src/app/Dockerfile-node-18-alpine",
+    "src/app/Dockerfile-node-18-debian-slim",
+  ],
   "labels": ["renovate", "renovate/{{replace '.*/' '' depName}}", "renovate/{{updateType}}"],
   "packageRules": [
     {

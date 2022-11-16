@@ -28,9 +28,9 @@ on:
 
 env:
   DOCKERFILE_LOCATION: src/app/Dockerfile
-  # DOCKERFILE_LOCATION: src/app/Dockerfile-node-16.18.0-alpine3.16
-  # DOCKERFILE_LOCATION: src/app/Dockerfile-node-16.18.0-bullseye-slim
-  # DOCKERFILE_LOCATION: src/app/Dockerfile-ubi9-nodejs-16-minimal
+  # DOCKERFILE_LOCATION: src/app/Dockerfile-node-18-alpine
+  # DOCKERFILE_LOCATION: src/app/Dockerfile-node-18-debian-slim
+  # DOCKERFILE_LOCATION: src/app/Dockerfile-ubi-nodejs-18-minimal
   # Container image destination - with registry and without tags
   CONTAINER_IMAGE: quay.io/petr_ruzicka/myc-hello-kubernetes
   CONTAINER_REGISTRY_USER: ${{ secrets.CONTAINER_REGISTRY_USER }}
