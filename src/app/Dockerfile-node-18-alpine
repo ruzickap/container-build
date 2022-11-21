@@ -1,15 +1,22 @@
 FROM node:18.12.1-alpine3.16
 
+ENV PORT 8080
+
 # Create app directory
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
 
 # Install app dependencies
 COPY package.json /usr/src/app/
-RUN npm install
+RUN npm install --cache /tmp/.npm && rm -rf /tmp/.npm
 
 # Bundle app source
 COPY . /usr/src/app
+
+EXPOSE ${PORT}
+
+HEALTHCHECK --interval=4s --timeout=3s --retries=5 \
+  CMD curl -f http://localhost:${PORT} || exit 1
 
 USER node
 CMD [ "npm", "start" ]

@@ -1,0 +1,24 @@
+FROM node:18 AS build-env
+
+# Install app dependencies
+WORKDIR /app
+COPY package.json /app
+RUN npm install
+
+# Bundle app source
+COPY . /app
+
+
+FROM gcr.io/distroless/nodejs18-debian11:nonroot
+
+ENV PORT 8080
+
+COPY --from=build-env /app /app
+WORKDIR /app
+
+EXPOSE ${PORT}
+
+HEALTHCHECK --interval=4s --timeout=3s --retries=5 \
+  CMD curl -f http://localhost:${PORT} || exit 1
+
+CMD [ "server.js" ]

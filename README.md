@@ -1,5 +1,7 @@
 # Container build process
 
+The source code was taken from: <https://github.com/paulbouwer/hello-kubernetes>
+
 ## Requirements
 
 - Container scan failed (how to progress even when there are CRITICAL
@@ -20,77 +22,126 @@
 - Image should be signed ([cosign](https://github.com/sigstore/cosign))
 - SBOM should be generated
 
+## Local tests
+
+Build commands:
+
+```bash
+docker build -f ./Dockerfile -t hello-kubernetes .
+docker build -f ./Dockerfile-node-18-alpine -t hello-kubernetes:node-18.11.0-alpine3.16 .
+docker build -f ./Dockerfile-node-18-debian-slim -t hello-kubernetes:node-18.11.0-bullseye-slim .
+docker build -f ./Dockerfile-nodejs-16-ubi -t hello-kubernetes:ubi-minimal .
+```
+
+Run commands:
+
+```bash
+docker run -p 8080:8080 --rm hello-kubernetes
+docker run -p 8080:8080 --rm hello-kubernetes:node-18.11.0-alpine3.16
+docker run -p 8080:8080 --rm hello-kubernetes:node-18.11.0-bullseye-slim
+docker run -p 8080:8080 --rm hello-kubernetes:ubi9-nodejs-16-minimal
+
+wget http://localhost:8080/
+```
+
+Debug container:
+
+```bash
+docker run -it --rm --entrypoint=/bin/sh --user root -p 8080:8080 myc-hello-kubernetes
+```
+
+Run in Kubernetes:
+
+```bash
+kubectl run myc-hello-kubernetes --image=quay.io/petr_ruzicka/myc-hello-kubernetes:latest
+```
+
 ## Possible build examples
+
+- Build container images with tag latest form main branch
+
+  ```bash
+  gh workflow run container-build.yml -f container_registry_push=true -f container_image_expires_after=30 -f container_image_skip_vulnerability_checks=true
+  ```
 
 - Tag "main" branch
 
   ```bash
-  TAG="7.0.16"
+  TAG="8.0.10"
 
   git tag "v${TAG}-beta.0" && git push origin "v${TAG}-beta.0"
   sleep 10
   WORKLOAD_ID=$(gh run list --workflow=container-build.yml --limit 1 --json databaseId | jq -r '.[].databaseId')
   gh run watch "${WORKLOAD_ID}"
+  # In case some containers has security vulnerabilities they will not be pushed to Container Registry by default
+  # If you want to do a force push please use something like:
+  gh workflow run container-build.yml --ref="v${TAG}-beta.0" -f container_registry_push=true -f container_image_expires_after=365 -f container_image_skip_vulnerability_checks=true
 
   git tag "v${TAG}-beta.1" && git push origin "v${TAG}-beta.1"
   sleep 10
   WORKLOAD_ID=$(gh run list --workflow=container-build.yml --limit 1 --json databaseId | jq -r '.[].databaseId')
   gh run watch "${WORKLOAD_ID}"
+  gh workflow run container-build.yml --ref="v${TAG}-beta.1" -f container_registry_push=true -f container_image_expires_after=365 -f container_image_skip_vulnerability_checks=true
 
   git tag "v${TAG}-rc.0" && git push origin "v${TAG}-rc.0"
   sleep 10
   WORKLOAD_ID=$(gh run list --workflow=container-build.yml --limit 1 --json databaseId | jq -r '.[].databaseId')
   gh run watch "${WORKLOAD_ID}"
+  gh workflow run container-build.yml --ref="v${TAG}-rc.0" -f container_registry_push=true -f container_image_expires_after=365 -f container_image_skip_vulnerability_checks=true
 
   git tag "v${TAG}-rc.1" && git push origin "v${TAG}-rc.1"
   sleep 10
   WORKLOAD_ID=$(gh run list --workflow=container-build.yml --limit 1 --json databaseId | jq -r '.[].databaseId')
   gh run watch "${WORKLOAD_ID}"
+  gh workflow run container-build.yml --ref="v${TAG}-rc.1" -f container_registry_push=true -f container_image_expires_after=365 -f container_image_skip_vulnerability_checks=true
 
   git tag "v${TAG}" && git push origin "v${TAG}"
   sleep 10
   WORKLOAD_ID=$(gh run list --workflow=container-build.yml --limit 1 --json databaseId | jq -r '.[].databaseId')
   gh run watch "${WORKLOAD_ID}"
+  gh workflow run container-build.yml --ref="v${TAG}" -f container_registry_push=true -f container_image_expires_after=365 -f container_image_skip_vulnerability_checks=true
   ```
 
-- Run build process form "main" branch - expires in 356 days (by default)
+- Run build process form "main" branch - expires in 300 days
 
   ```bash
-  gh workflow run container-build.yml -f container_registry_push=true -f container_image_vulnerability_checks=false -f container_image_expires_after=365
+  gh workflow run container-build.yml -f container_registry_push=true -f container_image_expires_after=300 -f container_image_skip_vulnerability_checks=true
   sleep 10
   WORKLOAD_ID=$(gh run list --workflow=container-build.yml --limit 1 --json databaseId | jq -r '.[].databaseId')
   gh run watch "${WORKLOAD_ID}"
   ```
 
-- Run build process form "fix" branch - expires in 30 days (by default)
+- Run build process form "fix" branch - expires in 30 days (manual workflow
+  execution is needed)
 
   ```bash
   git checkout -b fix && git push
-  gh workflow run container-build.yml -f container_registry_push=true -f container_image_vulnerability_checks=false --ref=fix
+  gh workflow run container-build.yml --ref=fix -f container_registry_push=true -f container_image_expires_after=30 -f container_image_skip_vulnerability_checks=true
   sleep 10
   WORKLOAD_ID=$(gh run list --workflow=container-build.yml --limit 1 --json databaseId | jq -r '.[].databaseId')
   gh run watch "${WORKLOAD_ID}"
   git checkout main && git branch -d fix && git push origin -d fix
   ```
 
-- Run build process form "fix2" branch form PR - expires in 30 days (by default)
+- Run build process form "fix2" branch form PR - expires in 30 days
+  (manual workflow execution is needed)
 
   ```bash
   git checkout -b fix2
   date > date
   git add date && git commit -m "date" && git push
   PR_URL=$(gh pr create --fill)
-  gh workflow run container-build.yml -f container_registry_push=true -f container_image_vulnerability_checks=false --ref=fix2
+  gh workflow run container-build.yml --ref=fix2 -f container_registry_push=true -f container_image_expires_after=30 -f container_image_skip_vulnerability_checks=true
   sleep 10
   WORKLOAD_ID=$(gh run list --workflow=container-build.yml --limit 1 --json databaseId | jq -r '.[].databaseId')
   gh run watch "${WORKLOAD_ID}"
   date > date
   git add date && git commit -m "date2" && git push
-  gh workflow run container-build.yml -f container_registry_push=true -f container_image_vulnerability_checks=false --ref=fix2
+  gh workflow run container-build.yml --ref=fix2  -f container_registry_push=true -f container_image_expires_after=30 -f container_image_skip_vulnerability_checks=true
   sleep 10
   WORKLOAD_ID=$(gh run list --workflow=container-build.yml --limit 1 --json databaseId | jq -r '.[].databaseId')
   gh run watch "${WORKLOAD_ID}"
   gh pr close --delete-branch "${PR_URL}"
   ```
 
-- Scheduled build - expires in 356 days
+- Scheduled build - expires in 300 days
