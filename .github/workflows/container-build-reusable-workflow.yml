@@ -1,0 +1,322 @@
+name: container-build-reusable-workflow
+
+on:
+  workflow_call:
+    inputs:
+      container_image_dockerfile_location:
+        description: "Dockerfile location"
+        type: string
+        required: true
+      container_image_destination:
+        description: "Container image destination - with registry and without tags"
+        type: string
+        required: true
+      container_image_tag_suffix:
+        description: "Container image tag suffix (alpine, debian-slim, ubi-minimal)"
+        type: string
+        required: false
+        default: ""
+      container_image_product_id:
+        description: "Container Image Label - Product ID"
+        type: string
+        required: true
+      container_image_vendor:
+        description: "Container Image Label - Vendor"
+        type: string
+        required: true
+      container_image_authors:
+        description: "Container Image Label - Authors"
+        type: string
+        required: true
+      container_image_repository_url:
+        description: "Container Image Label - Repository URL"
+        type: string
+        required: true
+      container_image_expires_after:
+        description: "Expires after (days) [or 'Never']"
+        type: string
+        required: false
+        default: "30"
+      container_registry_push:
+        description: "Push the image to Container Registry"
+        type: boolean
+        required: true
+      container_image_skip_vulnerability_checks:
+        description: "Skip image (vulnerability) scanner"
+        type: boolean
+        required: false
+        default: false
+    secrets:
+      container_registry_user:
+        description: "Username for Container Registry"
+        required: true
+      container_registry_password:
+        description: "Password for Container Registry"
+        required: true
+      # Prisma Cloud
+      pcc_console_url:
+        required: true
+      pcc_pass:
+        required: true
+      pcc_user:
+        required: true
+      # Snyk credentials
+      snyk_token:
+        required: true
+      # Wiz credentials
+      wiz_client_id:
+        required: true
+      wiz_client_secret:
+        required: true
+
+env:
+  # renovate: datasource=github-tags depName=goodwithtech/dockle
+  DOCKLE_VERSION: 0.4.9
+
+jobs:
+  container-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set GitHub variables
+        id: variables
+        env:
+          CONTAINER_IMAGE_DOCKERFILE_LOCATION: ${{ inputs.container_image_dockerfile_location }}
+          CONTAINER_IMAGE_DESTINATION: ${{ inputs.container_image_destination }}
+          CONTAINER_IMAGE_EXPIRES_AFTER: ${{ inputs.container_image_expires_after }}
+        run: |
+          set -euxo pipefail
+          echo "${CONTAINER_IMAGE_DESTINATION}" | awk -F / '{print "CONTAINER_REGISTRY="$1}' | tee -a "${GITHUB_OUTPUT}"
+          echo "CONTAINER_IMAGE_DOCKER_BUILD_DIRECTORY=$(dirname "${CONTAINER_IMAGE_DOCKERFILE_LOCATION}")" | tee -a "${GITHUB_OUTPUT}"
+          CONTAINER_IMAGE_BASE_IMAGE=$(awk '/^FROM/ {a=$2} END{print a}' "${CONTAINER_IMAGE_DOCKERFILE_LOCATION}")
+          docker pull --quiet "${CONTAINER_IMAGE_BASE_IMAGE}"
+          # Add 'docker.io' to base container images which are missing it
+          echo "${CONTAINER_IMAGE_BASE_IMAGE}" | grep -E '[^.]+\..+:' || CONTAINER_IMAGE_BASE_IMAGE="docker.io/${CONTAINER_IMAGE_BASE_IMAGE}"
+          echo "CONTAINER_IMAGE_BASE_IMAGE=${CONTAINER_IMAGE_BASE_IMAGE}" | tee -a "${GITHUB_OUTPUT}"
+          CONTAINER_IMAGE_BASE_IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${CONTAINER_IMAGE_BASE_IMAGE}" | cut -d @ -f 2)
+          echo "CONTAINER_IMAGE_BASE_IMAGE_DIGEST=${CONTAINER_IMAGE_BASE_IMAGE_DIGEST}" | tee -a "${GITHUB_OUTPUT}"
+          # Set variables for com.mycompany.image.expires.after and com.mycompany.image.expires
+          if [[ "${CONTAINER_IMAGE_EXPIRES_AFTER}" = "Never" ]]; then
+            echo "CONTAINER_IMAGE_EXPIRES=Never" | tee -a "${GITHUB_OUTPUT}"
+            echo "CONTAINER_IMAGE_EXPIRES_AFTER=Never" | tee -a "${GITHUB_OUTPUT}"
+          else
+            echo "CONTAINER_IMAGE_EXPIRES=$(date -u --date="+${CONTAINER_IMAGE_EXPIRES_AFTER} days" +'%FT%TZ')" | tee -a "${GITHUB_OUTPUT}"
+            echo "CONTAINER_IMAGE_EXPIRES_AFTER=${CONTAINER_IMAGE_EXPIRES_AFTER}d" | tee -a "${GITHUB_OUTPUT}"
+          fi
+          echo ${{ inputs.container_image_tag_suffix }}
+
+      - name: Docker meta
+        id: docker_meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            ${{ inputs.container_image_destination }}
+          flavor: |
+            suffix=${{ inputs.container_image_tag_suffix }},onlatest=true
+          tags: |
+            # Whever the pipeline runs form "main" - use "latest" container tag
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}},event=tag
+            type=semver,pattern={{major}}.{{minor}},event=tag
+            type=semver,pattern={{major}},event=tag,enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+            # When the pipeline is not excuted form 'main' branch use "pr-<mybranch>" tag
+            type=ref,prefix=br-,event=branch,enable=${{ github.ref_name != github.event.repository.default_branch }}
+          labels: |
+            # org.opencontainers.image.created - it is there by default
+            org.opencontainers.image.authors=${{ inputs.container_image_authors }}
+            # org.opencontainers.image.description - it is there by default (repository description)
+            org.opencontainers.image.documentation=${{ github.event.repository.html_url }}/blob/${{ github.sha }}/README.md
+            # org.opencontainers.image.revision - it is there by default
+            # org.opencontainers.image.source - it is there by default
+            # org.opencontainers.image.title - it is there by default
+            # org.opencontainers.image.url - it is there by default
+            # org.opencontainers.image.version - it is there by default
+            org.opencontainers.image.vendor=${{ inputs.container_image_vendor }}
+            # org.opencontainers.image.licenses - it is there by default
+            org.opencontainers.image.ref.name=${{ github.ref_name }}
+            org.opencontainers.image.base.digest=${{ steps.variables.outputs.CONTAINER_IMAGE_BASE_IMAGE_DIGEST }}
+            org.opencontainers.image.base.name=${{ steps.variables.outputs.CONTAINER_IMAGE_BASE_IMAGE }}
+            com.mycompany.image.pipeline.url=${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}
+            com.mycompany.image.pipeline.source=${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}/workflow
+            com.mycompany.image.product_id=${{ inputs.container_image_product_id }}
+            com.mycompany.image.repository.url=${{ inputs.container_image_repository_url }}
+            com.mycompany.image.used_for=all
+            com.mycompany.image.expires=${{ steps.variables.outputs.CONTAINER_IMAGE_EXPIRES }}
+            com.mycompany.image.expires.after=${{ steps.variables.outputs.CONTAINER_IMAGE_EXPIRES_AFTER }}
+            quay.expires-after=${{ steps.variables.outputs.CONTAINER_IMAGE_EXPIRES_AFTER }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Docker build
+        uses: docker/build-push-action@v3
+        id: build-push-action
+        with:
+          file: ${{ inputs.container_image_dockerfile_location }}
+          context: ${{ steps.variables.outputs.CONTAINER_IMAGE_DOCKER_BUILD_DIRECTORY }}
+          load: true
+          pull: true
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}
+
+      #########################
+      # Trivy Scanner
+      #########################
+
+      - name: Trivy - scan container image
+        uses: aquasecurity/trivy-action@master
+        if: ${{ always() && steps.build-push-action.outcome == 'success' }}
+        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+        with:
+          image-ref: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
+          exit-code: 1
+          ignore-unfixed: true
+          severity: CRITICAL
+
+      #########################
+      # Anchore - Grype
+      #########################
+
+      - name: Grype - scan container image
+        uses: anchore/scan-action@v3
+        # Continue whenever container was built (no matter if previous scanner failed)
+        if: ${{ always() && steps.build-push-action.outcome == 'success' }}
+        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+        with:
+          image: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
+          severity-cutoff: critical
+          output-format: table
+
+      #########################
+      # Snyk Scanner
+      #########################
+
+      - name: Snyk - scan container image
+        uses: snyk/actions/docker@master
+        if: ${{ always() && steps.build-push-action.outcome == 'success' }}
+        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+        env:
+          SNYK_TOKEN: ${{ secrets.snyk_token }}
+        with:
+          image: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
+          args: --file=${{ inputs.container_image_dockerfile_location }} --severity-threshold=high
+
+      - name: Snyk - upload SARIF file
+        uses: github/codeql-action/upload-sarif@v2
+        if: ${{ always() && steps.build-push-action.outcome == 'success' }}
+        with:
+          sarif_file: snyk.sarif
+
+      #########################
+      # Prisma Cloud Scanner
+      #########################
+
+      # - name: Prisma Cloud - scan container image
+      #   if: ${{ always() && steps.build-push-action.outcome == 'success }}
+      #   id: prisma-cloud-scan
+      #   uses: PaloAltoNetworks/prisma-cloud-scan@v1
+      #   continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+      #   with:
+      #     pcc_console_url: ${{ secrets.pcc_console_url }}
+      #     pcc_user: ${{ secrets.pcc_user }}
+      #     pcc_pass: ${{ secrets.pcc_pass }}
+      #     image_name: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
+
+      # - name: Prisma Cloud - upload SARIF file
+      #   if: ${{ always() && steps.build-push-action.outcome == 'success' }}
+      #   uses: github/codeql-action/upload-sarif@v1
+      #   continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+      #   with:
+      #     sarif_file: ${{ steps.prisma-cloud-scan.outputs.sarif_file }}
+
+      #########################
+      # Wiz Scanner
+      #########################
+
+      - name: Wiz - scan container image
+        if: ${{ always() && steps.build-push-action.outcome == 'success' }}
+        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+        env:
+          WIZ_CLIENT_ID: ${{ secrets.wiz_client_id }}
+          WIZ_CLIENT_SECRET: ${{ secrets.wiz_client_secret }}
+          CONTAINER_IMAGE_DESTINATION: ${{ inputs.container_image_destination }}
+        run: |
+          set -euxo pipefail
+          curl -s -o wizcli https://wizcli.app.wiz.io/wizcli && chmod +x wizcli
+          ./wizcli auth --id "$WIZ_CLIENT_ID" --secret "$WIZ_CLIENT_SECRET"
+          ./wizcli docker scan --image "${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}" --tag product_id="${{ inputs.container_image_product_id }}"
+
+      #########################
+      # Dockle
+      #########################
+
+      - name: Dockle - scan container image
+        if: always() && steps.build-push-action.outcome == 'success'
+        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+        env:
+          # Ignore check which requires not using the "latest" tag
+          DOCKLE_IGNORES: DKL-DI-0006
+        run: |
+          set -euxo pipefail
+          curl -sL -o dockle.deb https://github.com/goodwithtech/dockle/releases/download/v${{ env.DOCKLE_VERSION }}/dockle_${{ env.DOCKLE_VERSION }}_Linux-64bit.deb
+          sudo dpkg -i ./dockle.deb
+          dockle --exit-code 1 "${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}"
+
+      #########################
+      # SBOM
+      #########################
+
+      ###############################################
+      # Push container image to registry and sign it
+      ###############################################
+
+      - name: Login to container registry
+        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ steps.variables.outputs.CONTAINER_REGISTRY }}
+          username: ${{ secrets.container_registry_user }}
+          password: ${{ secrets.container_registry_password }}
+
+      # docker/build-push-action always creates new container image - therefore I'm using simple `docker push`
+      - name: Push image to container registry
+        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
+        run: |
+          set -euxo pipefail
+          docker push --all-tags "${{ inputs.container_image_destination }}"
+
+      # - name: Install Cosign
+      #   if: ${{ inputs.container_registry_push || startsWith(github.ref, 'refs/tags/') || github.event_name == 'schedule' }}
+      #   uses: sigstore/cosign-installer@v2
+
+      # - name: Sign image with a key
+      #   if: ${{ inputs.container_registry_push || startsWith(github.ref, 'refs/tags/') || github.event_name == 'schedule' }}
+      #   run: |
+      #     echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign --key env://COSIGN_PRIVATE_KEY {}@${{ steps.docker_push.outputs.digest }}
+      #   env:
+      #     TAGS: ${{ steps.docker_meta.outputs.tags }}
+      #     COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+      #     COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+
+      # - name: Sign the images with GitHub OIDC Token
+      #   if: ${{ inputs.container_registry_push || startsWith(github.ref, 'refs/tags/') || github.event_name == 'schedule' }}
+      #   run: |
+      #     echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign {}@${{ steps.docker_push.outputs.digest }}
+      #   env:
+      #     TAGS: ${{ steps.docker_meta.outputs.tags }}
+      #     COSIGN_EXPERIMENTAL: true
+
+      # Create release only in "main Dockerfile" pipeline task (others will skip this task)
+      - name: Create Release
+        if: ${{ startsWith(github.ref, 'refs/tags/') && endsWith(steps.docker_meta.outputs.tags, 'latest') && endsWith(inputs.container_image_dockerfile_location, '/Dockerfile') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euxo pipefail
+          gh release create ${{ github.ref_name }} --generate-notes
