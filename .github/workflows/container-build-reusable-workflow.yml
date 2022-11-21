@@ -55,24 +55,24 @@ on:
         required: true
       # Prisma Cloud
       pcc_console_url:
-        required: true
+        required: false
       pcc_pass:
-        required: true
+        required: false
       pcc_user:
-        required: true
+        required: false
       # Snyk credentials
       snyk_token:
-        required: true
+        required: false
       # Wiz credentials
       wiz_client_id:
-        required: true
+        required: false
       wiz_client_secret:
-        required: true
+        required: false
 
 env:
   # renovate: datasource=github-tags depName=goodwithtech/dockle
   DOCKLE_VERSION: 0.4.9
-  # Workaround for "testing if a secret exists" issue: https://github.com/actions/runner/issues/953
+  # Workaround for "testing if a secret exists" issue: https://github.com/actions/runner/issues/953, https://github.com/orgs/community/discussions/26726
   PCC_CONSOLE_URL: ${{ secrets.pcc_console_url }}
   PCC_PASS: ${{ secrets.pcc_pass }}
   PCC_USER: ${{ secrets.pcc_user }}
