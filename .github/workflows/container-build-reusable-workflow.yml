@@ -72,6 +72,13 @@ on:
 env:
   # renovate: datasource=github-tags depName=goodwithtech/dockle
   DOCKLE_VERSION: 0.4.9
+  # Workaround for "testing if a secret exists" issue: https://github.com/actions/runner/issues/953
+  PCC_CONSOLE_URL: ${{ secrets.pcc_console_url }}
+  PCC_PASS: ${{ secrets.pcc_pass }}
+  PCC_USER: ${{ secrets.pcc_user }}
+  SNYK_TOKEN: ${{ secrets.snyk_token }}
+  WIZ_CLIENT_ID: ${{ secrets.wiz_client_id }}
+  WIZ_CLIENT_SECRET: ${{ secrets.wiz_client_secret }}
 
 jobs:
   container-build:
@@ -199,7 +206,7 @@ jobs:
 
       - name: Snyk - scan container image
         uses: snyk/actions/docker@master
-        if: ${{ always() && steps.build-push-action.outcome == 'success' }}
+        if: ${{ always() && steps.build-push-action.outcome == 'success' && env.SNYK_TOKEN != '' }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         env:
           SNYK_TOKEN: ${{ secrets.snyk_token }}
@@ -209,7 +216,7 @@ jobs:
 
       - name: Snyk - upload SARIF file
         uses: github/codeql-action/upload-sarif@v2
-        if: ${{ always() && steps.build-push-action.outcome == 'success' }}
+        if: ${{ always() && steps.build-push-action.outcome == 'success' && env.SNYK_TOKEN != '' }}
         with:
           sarif_file: snyk.sarif
 
@@ -217,30 +224,30 @@ jobs:
       # Prisma Cloud Scanner
       #########################
 
-      # - name: Prisma Cloud - scan container image
-      #   if: ${{ always() && steps.build-push-action.outcome == 'success }}
-      #   id: prisma-cloud-scan
-      #   uses: PaloAltoNetworks/prisma-cloud-scan@v1
-      #   continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
-      #   with:
-      #     pcc_console_url: ${{ secrets.pcc_console_url }}
-      #     pcc_user: ${{ secrets.pcc_user }}
-      #     pcc_pass: ${{ secrets.pcc_pass }}
-      #     image_name: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
+      - name: Prisma Cloud - scan container image
+        if: ${{ always() && steps.build-push-action.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' }}
+        id: prisma-cloud-scan
+        uses: PaloAltoNetworks/prisma-cloud-scan@v1
+        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+        with:
+          pcc_console_url: ${{ secrets.pcc_console_url }}
+          pcc_user: ${{ secrets.pcc_user }}
+          pcc_pass: ${{ secrets.pcc_pass }}
+          image_name: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
 
-      # - name: Prisma Cloud - upload SARIF file
-      #   if: ${{ always() && steps.build-push-action.outcome == 'success' }}
-      #   uses: github/codeql-action/upload-sarif@v1
-      #   continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
-      #   with:
-      #     sarif_file: ${{ steps.prisma-cloud-scan.outputs.sarif_file }}
+      - name: Prisma Cloud - upload SARIF file
+        if: ${{ always() && steps.build-push-action.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' }}
+        uses: github/codeql-action/upload-sarif@v1
+        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+        with:
+          sarif_file: ${{ steps.prisma-cloud-scan.outputs.sarif_file }}
 
       #########################
       # Wiz Scanner
       #########################
 
       - name: Wiz - scan container image
-        if: ${{ always() && steps.build-push-action.outcome == 'success' }}
+        if: ${{ always() && steps.build-push-action.outcome == 'success' && env.WIZ_CLIENT_ID && env.WIZ_CLIENT_SECRET }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         env:
           WIZ_CLIENT_ID: ${{ secrets.wiz_client_id }}
