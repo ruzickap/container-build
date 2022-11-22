@@ -29,3 +29,9 @@ jobs:
           SARIF_REPORTER: true
           SPELL_CSPELL_FILTER_REGEX_EXCLUDE: (.github/|src/app/|.checkov.yml)
           VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+
+      - name: Upload MegaLinter scan results to GitHub Security tab
+        if: ${{ always() }}
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: "megalinter-reports/megalinter-report.sarif"

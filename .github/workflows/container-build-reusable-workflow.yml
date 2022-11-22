@@ -267,7 +267,7 @@ jobs:
         if: always() && steps.build-push-action.outcome == 'success'
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         env:
-          # Ignore check which requires not using the "latest" tag
+          # Ignore check which requires "not using the latest tag"
           DOCKLE_IGNORES: DKL-DI-0006
         run: |
           set -euxo pipefail
