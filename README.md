@@ -27,27 +27,29 @@ The source code was taken from: <https://github.com/paulbouwer/hello-kubernetes>
 Build commands:
 
 ```bash
-docker build -f ./Dockerfile -t hello-kubernetes .
-docker build -f ./Dockerfile-node-18-alpine -t hello-kubernetes:node-18.11.0-alpine3.16 .
-docker build -f ./Dockerfile-node-18-debian-slim -t hello-kubernetes:node-18.11.0-bullseye-slim .
-docker build -f ./Dockerfile-nodejs-16-ubi -t hello-kubernetes:ubi-minimal .
+docker build -f ./src/app/Dockerfile -t myc-hello-kubernetes:latest src/app
+docker build -f ./src/app/Dockerfile-node-18-alpine -t myc-hello-kubernetes:latest-alpine src/app
+docker build -f ./src/app/Dockerfile-node-18-debian-slim -t myc-hello-kubernetes:latest-debian-slim src/app
+docker build -f ./src/app/Dockerfile-nodejs18-distroless -t myc-hello-kubernetes:latest-distroless src/app
+docker build -f ./src/app/Dockerfile-nodejs-16-ubi -t myc-hello-kubernetes:latest-ubi src/app
 ```
 
 Run commands:
 
 ```bash
-docker run -p 8080:8080 --rm hello-kubernetes
-docker run -p 8080:8080 --rm hello-kubernetes:node-18.11.0-alpine3.16
-docker run -p 8080:8080 --rm hello-kubernetes:node-18.11.0-bullseye-slim
-docker run -p 8080:8080 --rm hello-kubernetes:ubi9-nodejs-16-minimal
+docker run -p 8080:8080 --rm myc-hello-kubernetes:latest
+docker run -p 8080:8080 --rm myc-hello-kubernetes:latest-alpine
+docker run -p 8080:8080 --rm myc-hello-kubernetes:latest-debian-slim
+docker run -p 8080:8080 --rm myc-hello-kubernetes:latest-distroless
+docker run -p 8080:8080 --rm myc-hello-kubernetes:latest-ubi
 
-wget http://localhost:8080/
+curl http://localhost:8080/
 ```
 
 Debug container:
 
 ```bash
-docker run -it --rm --entrypoint=/bin/sh --user root -p 8080:8080 myc-hello-kubernetes
+docker run -it --rm --entrypoint=/bin/sh --user root -p 8080:8080 myc-hello-kubernetes:latest
 ```
 
 Run in Kubernetes:
