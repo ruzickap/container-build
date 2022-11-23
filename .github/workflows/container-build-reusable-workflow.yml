@@ -237,7 +237,7 @@ jobs:
 
       - name: Prisma Cloud - upload SARIF file
         if: ${{ always() && steps.build-push-action.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' }}
-        uses: github/codeql-action/upload-sarif@v1
+        uses: github/codeql-action/upload-sarif@v2
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         with:
           sarif_file: ${{ steps.prisma-cloud-scan.outputs.sarif_file }}
