@@ -53,7 +53,13 @@ on:
       container_registry_password:
         description: "Password for Container Registry"
         required: true
-      # Prisma Cloud
+      cosign_private_key:
+        description: "Cosign Private Key"
+        required: false
+      cosign_private_key_password:
+        description: "Password for Cosign Private Key"
+        required: false
+      # Prisma Cloud credentials
       pcc_console_url:
         required: false
       pcc_pass:
@@ -79,6 +85,8 @@ env:
   SNYK_TOKEN: ${{ secrets.snyk_token }}
   WIZ_CLIENT_ID: ${{ secrets.wiz_client_id }}
   WIZ_CLIENT_SECRET: ${{ secrets.wiz_client_secret }}
+  COSIGN_PRIVATE_KEY: ${{ secrets.cosign_private_key }}
+  COSIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.cosign_private_key_password }}
 
 jobs:
   container-build:
@@ -209,7 +217,7 @@ jobs:
         if: ${{ always() && steps.build-push-action.outcome == 'success' && env.SNYK_TOKEN != '' }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         env:
-          SNYK_TOKEN: ${{ secrets.snyk_token }}
+          SNYK_TOKEN: ${{ env.SNYK_TOKEN }}
         with:
           image: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
           args: --file=${{ inputs.container_image_dockerfile_location }} --severity-threshold=high
@@ -230,9 +238,9 @@ jobs:
         uses: PaloAltoNetworks/prisma-cloud-scan@v1
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         with:
-          pcc_console_url: ${{ secrets.pcc_console_url }}
-          pcc_user: ${{ secrets.pcc_user }}
-          pcc_pass: ${{ secrets.pcc_pass }}
+          pcc_console_url: ${{ env.PCC_CONSOLE_URL }}
+          pcc_user: ${{ env.PCC_USER }}
+          pcc_pass: ${{ env.PCC_PASS }}
           image_name: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
 
       - name: Prisma Cloud - upload SARIF file
@@ -247,11 +255,11 @@ jobs:
       #########################
 
       - name: Wiz - scan container image
-        if: ${{ always() && steps.build-push-action.outcome == 'success' && env.WIZ_CLIENT_ID && env.WIZ_CLIENT_SECRET }}
+        if: ${{ always() && steps.build-push-action.outcome == 'success' && env.WIZ_CLIENT_ID != '' && env.WIZ_CLIENT_SECRET != '' }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         env:
-          WIZ_CLIENT_ID: ${{ secrets.wiz_client_id }}
-          WIZ_CLIENT_SECRET: ${{ secrets.wiz_client_secret }}
+          WIZ_CLIENT_ID: ${{ env.WIZ_CLIENT_ID }}
+          WIZ_CLIENT_SECRET: ${{ env.WIZ_CLIENT_SECRET }}
           CONTAINER_IMAGE_DESTINATION: ${{ inputs.container_image_destination }}
         run: |
           set -euxo pipefail
@@ -291,37 +299,39 @@ jobs:
           username: ${{ secrets.container_registry_user }}
           password: ${{ secrets.container_registry_password }}
 
-      # docker/build-push-action always creates new container image - therefore I'm using simple `docker push`
+      # docker/build-push-action always creates/build new container image - therefore I'm using simple `docker push`
       - name: Push image to container registry
         if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
         run: |
           set -euxo pipefail
           docker push --all-tags "${{ inputs.container_image_destination }}"
 
-      # - name: Install Cosign
-      #   if: ${{ inputs.container_registry_push || startsWith(github.ref, 'refs/tags/') || github.event_name == 'schedule' }}
-      #   uses: sigstore/cosign-installer@v2
+      - name: Install Cosign
+        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
+        uses: sigstore/cosign-installer@v2
 
-      # - name: Sign image with a key
-      #   if: ${{ inputs.container_registry_push || startsWith(github.ref, 'refs/tags/') || github.event_name == 'schedule' }}
-      #   run: |
-      #     echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign --key env://COSIGN_PRIVATE_KEY {}@${{ steps.docker_push.outputs.digest }}
-      #   env:
-      #     TAGS: ${{ steps.docker_meta.outputs.tags }}
-      #     COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-      #     COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+      - name: Sign image with a key
+        if: ${{ ( startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' ) && env.COSIGN_PRIVATE_KEY != '' && env.COSIGN_PRIVATE_KEY_PASSWORD != '' }}
+        run: |
+          set -euxo pipefail
+          echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} echo cosign sign --key env://COSIGN_PRIVATE_KEY {}@${{ steps.build-push-action.outputs.digest }}
+        env:
+          TAGS: ${{ steps.docker_meta.outputs.tags }}
+          COSIGN_PRIVATE_KEY: ${{ env.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ env.COSIGN_PRIVATE_KEY_PASSWORD }}
 
-      # - name: Sign the images with GitHub OIDC Token
-      #   if: ${{ inputs.container_registry_push || startsWith(github.ref, 'refs/tags/') || github.event_name == 'schedule' }}
-      #   run: |
-      #     echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign {}@${{ steps.docker_push.outputs.digest }}
-      #   env:
-      #     TAGS: ${{ steps.docker_meta.outputs.tags }}
-      #     COSIGN_EXPERIMENTAL: true
+      - name: Sign the images with GitHub OIDC Token
+        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
+        run: |
+          set -euxo pipefail
+          echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} echo cosign sign {}@${{ steps.build-push-action.outputs.digest }}
+        env:
+          TAGS: ${{ steps.docker_meta.outputs.tags }}
+          COSIGN_EXPERIMENTAL: true
 
       # Create release only in "main Dockerfile" pipeline task (others will skip this task)
       - name: Create Release
-        if: ${{ startsWith(github.ref, 'refs/tags/') && endsWith(steps.docker_meta.outputs.tags, 'latest') && endsWith(inputs.container_image_dockerfile_location, '/Dockerfile') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') && endsWith(steps.docker_meta.outputs.tags, ':latest') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
