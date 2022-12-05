@@ -76,8 +76,6 @@ on:
         required: false
 
 env:
-  # renovate: datasource=github-tags depName=goodwithtech/dockle
-  DOCKLE_VERSION: 0.4.9
   # Workaround for "testing if a secret exists" issue: https://github.com/actions/runner/issues/953, https://github.com/orgs/community/discussions/26726
   PCC_CONSOLE_URL: ${{ secrets.pcc_console_url }}
   PCC_PASS: ${{ secrets.pcc_pass }}
@@ -266,22 +264,6 @@ jobs:
           curl -s -o wizcli https://wizcli.app.wiz.io/wizcli && chmod +x wizcli
           ./wizcli auth --id "$WIZ_CLIENT_ID" --secret "$WIZ_CLIENT_SECRET"
           ./wizcli docker scan --image "${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}" --tag product_id="${{ inputs.container_image_product_id }}"
-
-      #########################
-      # Dockle
-      #########################
-
-      - name: Dockle - scan container image
-        if: always() && steps.build-push-action.outcome == 'success'
-        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
-        env:
-          # Ignore check which requires "not using the latest tag"
-          DOCKLE_IGNORES: DKL-DI-0006
-        run: |
-          set -euxo pipefail
-          curl -sL -o dockle.deb https://github.com/goodwithtech/dockle/releases/download/v${{ env.DOCKLE_VERSION }}/dockle_${{ env.DOCKLE_VERSION }}_Linux-64bit.deb
-          sudo dpkg -i ./dockle.deb
-          dockle --exit-code 1 "${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}"
 
       #########################
       # SBOM
