@@ -40,7 +40,6 @@ env:
       - container_image_dockerfile_location: src/app/Dockerfile-node-18-debian-slim
         container_image_tag_suffix: "-debian-slim"
 
-      # Dockle is complaining about "Use COPY instead of ADD"
       - container_image_dockerfile_location: src/app/Dockerfile-nodejs-16-ubi
         container_image_tag_suffix: "-ubi"
 

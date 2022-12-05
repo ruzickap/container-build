@@ -1,3 +1,10 @@
 {
-  "ignoreWords": ["distroless", "petr", "ruzicka"]
+  "ignoreWords": [
+    "distroless",
+    "petr",
+    "ruzicka",
+    "apiserver",
+    "skopeo",
+    "rekor"
+  ]
 }
