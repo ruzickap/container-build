@@ -64,6 +64,7 @@ Example repositories:
 
 - <https://quay.io/repository/cilium/cilium?tab=tags>
 - <https://quay.io/repository/metallb/controller?tab=tags>
+- <https://quay.io/repository/kubescape/kubescape?tab=tags>
 
 ```bash
 IMAGE="registry.k8s.io/kube-apiserver-amd64:v1.24.0"
