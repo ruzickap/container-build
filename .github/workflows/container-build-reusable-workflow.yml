@@ -279,12 +279,15 @@ jobs:
           username: ${{ secrets.container_registry_user }}
           password: ${{ secrets.container_registry_password }}
 
-      # docker/build-push-action always creates/build new container image - therefore I'm using simple `docker push`
-      - name: Push image to container registry
+      - name: Docker push
+        uses: docker/build-push-action@v3
         if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
-        run: |
-          set -euxo pipefail
-          docker push --all-tags "${{ inputs.container_image_destination }}"
+        with:
+          file: ${{ inputs.container_image_dockerfile_location }}
+          context: ${{ steps.variables.outputs.CONTAINER_IMAGE_DOCKER_BUILD_DIRECTORY }}
+          push: true
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}
 
       - name: Install Cosign
         if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
