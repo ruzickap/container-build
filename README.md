@@ -68,14 +68,21 @@ Example repositories:
 
 ```bash
 IMAGE="registry.k8s.io/kube-apiserver-amd64:v1.24.0"
+IMAGE="quay.io/petr_ruzicka/malware-cryptominer-container:latest"
+IMAGE="quay.io/cilium/cilium:v1.13.0-rc3"
+IMAGE="quay.io/metallb/controller:latest"
 
 skopeo inspect --raw "docker://${IMAGE}"
 COSIGN_EXPERIMENTAL=1 cosign verify "${IMAGE}" | jq
 COSIGN_EXPERIMENTAL=1 cosign verify "${IMAGE}" | jq -r '.[].optional| .Issuer + "-" + .Subject'
+cosign triangulate "${IMAGE}"
 
 rekor-cli get --uuid 68a53d0e75463d805dc9437dda5815171502475dd704459a5ce3078edba96226 --format json | jq -r .Attestation | base64 --decode | jq
 curl -s https://rekor.sigstore.dev/api/v1/log/entries/68a53d0e75463d805dc9437dda5815171502475dd704459a5ce3078edba96226 | jq
-rekor-cli search --email toddysm_dev1@outlook.com
+
+rekor-cli search --email petr.ruzicka@gmail.com
+
+rekor-cli get --log-index 8757761
 ```
 
 ## Possible build examples

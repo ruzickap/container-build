@@ -293,15 +293,16 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
         uses: sigstore/cosign-installer@v2
 
-      - name: Sign image with a key
-        if: ${{ ( startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' ) && env.COSIGN_PRIVATE_KEY != '' && env.COSIGN_PRIVATE_KEY_PASSWORD != '' }}
-        run: |
-          set -euxo pipefail
-          echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign --key env://COSIGN_PRIVATE_KEY {}@${{ steps.build-push-action.outputs.digest }}
-        env:
-          TAGS: ${{ steps.docker_meta.outputs.tags }}
-          COSIGN_PRIVATE_KEY: ${{ env.COSIGN_PRIVATE_KEY }}
-          COSIGN_PASSWORD: ${{ env.COSIGN_PRIVATE_KEY_PASSWORD }}
+      # - name: Sign image with a key
+      #   if: ${{ ( startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' ) && env.COSIGN_PRIVATE_KEY != '' && env.COSIGN_PRIVATE_KEY_PASSWORD != '' }}
+      #   run: |
+      #     set -euxo pipefail
+      #     echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign --key env://COSIGN_PRIVATE_KEY {}@${{ steps.build-push-action.outputs.digest }}
+      #     cosign public-key --key env://COSIGN_PRIVATE_KEY
+      #   env:
+      #     TAGS: ${{ steps.docker_meta.outputs.tags }}
+      #     COSIGN_PRIVATE_KEY: ${{ env.COSIGN_PRIVATE_KEY }}
+      #     COSIGN_PASSWORD: ${{ env.COSIGN_PRIVATE_KEY_PASSWORD }}
 
       - name: Sign the images with GitHub OIDC Token
         if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
