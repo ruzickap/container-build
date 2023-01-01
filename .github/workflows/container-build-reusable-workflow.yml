@@ -90,8 +90,6 @@ jobs:
   container-build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      id-token: write
       security-events: write
     steps:
       - name: Checkout
@@ -114,6 +112,7 @@ jobs:
           echo "CONTAINER_IMAGE_BASE_IMAGE=${CONTAINER_IMAGE_BASE_IMAGE}" | tee -a "${GITHUB_OUTPUT}"
           CONTAINER_IMAGE_BASE_IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${CONTAINER_IMAGE_BASE_IMAGE}" | cut -d @ -f 2)
           echo "CONTAINER_IMAGE_BASE_IMAGE_DIGEST=${CONTAINER_IMAGE_BASE_IMAGE_DIGEST}" | tee -a "${GITHUB_OUTPUT}"
+          echo '${{ toJSON(github.event.repository.topics) }}' | jq -r '. | join(",") | "GITHUB_REPOSITORY_TOPICS=\(.)"' | tee -a "${GITHUB_OUTPUT}"
           # Set variables for com.mycompany.image.expires.after and com.mycompany.image.expires
           if [[ "${CONTAINER_IMAGE_EXPIRES_AFTER}" = "Never" ]]; then
             echo "CONTAINER_IMAGE_EXPIRES=Never" | tee -a "${GITHUB_OUTPUT}"
@@ -121,6 +120,19 @@ jobs:
           else
             echo "CONTAINER_IMAGE_EXPIRES=$(date -u --date="+${CONTAINER_IMAGE_EXPIRES_AFTER} days" +'%FT%TZ')" | tee -a "${GITHUB_OUTPUT}"
             echo "CONTAINER_IMAGE_EXPIRES_AFTER=${CONTAINER_IMAGE_EXPIRES_AFTER}d" | tee -a "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Check if the tag exists in registry
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          set -euxo pipefail
+          CONTAINER_IMAGE_TAG=$(echo "${{ github.ref_name }}${{ inputs.container_image_tag_suffix }}" | sed 's/^v//')
+          # Check if the tag exists in registry - if yes - skip build
+          if docker manifest inspect "${{ inputs.container_image_destination }}:${CONTAINER_IMAGE_TAG}" ; then
+            echo "*** Container tag \"${{ inputs.container_image_destination }}:${CONTAINER_IMAGE_TAG}\" already exists !!!"
+            exit 1
+          else
+            echo "*** Container tag \"${{ inputs.container_image_destination }}:${CONTAINER_IMAGE_TAG}\" doesn't exist..."
           fi
 
       - name: Docker meta
@@ -134,33 +146,37 @@ jobs:
           tags: |
             # Whever the pipeline runs form "main" - use "latest" container tag
             type=raw,value=latest,enable={{is_default_branch}}
+            # When the pipeline is not excuted form 'main' branch use "pr-<mybranch>" tag
+            type=ref,prefix=br-,event=branch,enable=${{ github.ref_name != github.event.repository.default_branch }}
             type=semver,pattern={{version}},event=tag
             type=semver,pattern={{major}}.{{minor}},event=tag
             type=semver,pattern={{major}},event=tag,enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
-            # When the pipeline is not excuted form 'main' branch use "pr-<mybranch>" tag
-            type=ref,prefix=br-,event=branch,enable=${{ github.ref_name != github.event.repository.default_branch }}
           labels: |
             # org.opencontainers.image.created - it is there by default
-            org.opencontainers.image.authors=${{ inputs.container_image_authors }}
             # org.opencontainers.image.description - it is there by default (repository description)
-            org.opencontainers.image.documentation=${{ github.event.repository.html_url }}/blob/${{ github.sha }}/README.md
+            # org.opencontainers.image.licenses - it is there by default
             # org.opencontainers.image.revision - it is there by default
             # org.opencontainers.image.source - it is there by default
             # org.opencontainers.image.title - it is there by default
             # org.opencontainers.image.url - it is there by default
             # org.opencontainers.image.version - it is there by default
-            org.opencontainers.image.vendor=${{ inputs.container_image_vendor }}
-            # org.opencontainers.image.licenses - it is there by default
-            org.opencontainers.image.ref.name=${{ github.ref_name }}
+            org.opencontainers.image.authors=${{ inputs.container_image_authors }}
             org.opencontainers.image.base.digest=${{ steps.variables.outputs.CONTAINER_IMAGE_BASE_IMAGE_DIGEST }}
             org.opencontainers.image.base.name=${{ steps.variables.outputs.CONTAINER_IMAGE_BASE_IMAGE }}
-            com.mycompany.image.pipeline.url=${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}
+            org.opencontainers.image.documentation=${{ github.event.repository.html_url }}/blob/${{ github.sha }}/README.md
+            org.opencontainers.image.ref.name=${{ github.ref_name }}
+            org.opencontainers.image.vendor=${{ inputs.container_image_vendor }}
+            io.artifacthub.package.keywords=${{ steps.variables.outputs.GITHUB_REPOSITORY_TOPICS }}
+            io.artifacthub.package.license=${{ github.event.repository.license.spdx_id }}
+            io.artifacthub.package.maintainers=[{"name":"maintainer","email":"${{ inputs.container_image_authors }}"}]
+            io.artifacthub.package.readme-url=https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/README.md
+            com.mycompany.image.expires.after=${{ steps.variables.outputs.CONTAINER_IMAGE_EXPIRES_AFTER }}
+            com.mycompany.image.expires=${{ steps.variables.outputs.CONTAINER_IMAGE_EXPIRES }}
             com.mycompany.image.pipeline.source=${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}/workflow
+            com.mycompany.image.pipeline.url=${{ github.event.repository.html_url }}/actions/runs/${{ github.run_id }}
             com.mycompany.image.product_id=${{ inputs.container_image_product_id }}
             com.mycompany.image.repository.url=${{ inputs.container_image_repository_url }}
             com.mycompany.image.used_for=all
-            com.mycompany.image.expires=${{ steps.variables.outputs.CONTAINER_IMAGE_EXPIRES }}
-            com.mycompany.image.expires.after=${{ steps.variables.outputs.CONTAINER_IMAGE_EXPIRES_AFTER }}
             quay.expires-after=${{ steps.variables.outputs.CONTAINER_IMAGE_EXPIRES_AFTER }}
 
       - name: Set up Docker Buildx
@@ -168,7 +184,7 @@ jobs:
 
       - name: Docker build
         uses: docker/build-push-action@v3
-        id: build-push-action
+        id: build-push-action-load
         with:
           file: ${{ inputs.container_image_dockerfile_location }}
           context: ${{ steps.variables.outputs.CONTAINER_IMAGE_DOCKER_BUILD_DIRECTORY }}
@@ -182,7 +198,7 @@ jobs:
 
       - name: Trivy - scan container image
         uses: aquasecurity/trivy-action@master
-        if: ${{ always() && steps.build-push-action.outcome == 'success' }}
+        if: ${{ always() && steps.build-push-action-load.outcome == 'success' }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         with:
           image-ref: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
@@ -197,7 +213,7 @@ jobs:
       - name: Grype - scan container image
         uses: anchore/scan-action@v3
         # Continue whenever container was built (no matter if previous scanner failed)
-        if: ${{ always() && steps.build-push-action.outcome == 'success' }}
+        if: ${{ always() && steps.build-push-action-load.outcome == 'success' }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         with:
           image: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
@@ -210,7 +226,7 @@ jobs:
 
       - name: Snyk - scan container image
         uses: snyk/actions/docker@master
-        if: ${{ always() && steps.build-push-action.outcome == 'success' && env.SNYK_TOKEN != '' }}
+        if: ${{ always() && steps.build-push-action-load.outcome == 'success' && env.SNYK_TOKEN != '' }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         env:
           SNYK_TOKEN: ${{ env.SNYK_TOKEN }}
@@ -220,7 +236,7 @@ jobs:
 
       - name: Snyk - upload SARIF file
         uses: github/codeql-action/upload-sarif@v2
-        if: ${{ always() && steps.build-push-action.outcome == 'success' && env.SNYK_TOKEN != '' }}
+        if: ${{ always() && steps.build-push-action-load.outcome == 'success' && env.SNYK_TOKEN != '' }}
         with:
           sarif_file: snyk.sarif
 
@@ -229,7 +245,7 @@ jobs:
       #########################
 
       - name: Prisma Cloud - scan container image
-        if: ${{ always() && steps.build-push-action.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' }}
+        if: ${{ always() && steps.build-push-action-load.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' }}
         id: prisma-cloud-scan
         uses: PaloAltoNetworks/prisma-cloud-scan@v1
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
@@ -240,7 +256,7 @@ jobs:
           image_name: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
 
       - name: Prisma Cloud - upload SARIF file
-        if: ${{ always() && steps.build-push-action.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' }}
+        if: ${{ always() && steps.build-push-action-load.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' }}
         uses: github/codeql-action/upload-sarif@v2
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         with:
@@ -251,7 +267,7 @@ jobs:
       #########################
 
       - name: Wiz - scan container image
-        if: ${{ always() && steps.build-push-action.outcome == 'success' && env.WIZ_CLIENT_ID != '' && env.WIZ_CLIENT_SECRET != '' }}
+        if: ${{ always() && steps.build-push-action-load.outcome == 'success' && env.WIZ_CLIENT_ID != '' && env.WIZ_CLIENT_SECRET != '' }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         env:
           WIZ_CLIENT_ID: ${{ env.WIZ_CLIENT_ID }}
@@ -266,6 +282,15 @@ jobs:
       #########################
       # SBOM
       #########################
+
+      - name: Trivy - create SBOM
+        uses: aquasecurity/trivy-action@master
+        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
+        with:
+          image-ref: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
+          scan-type: "image"
+          format: "cyclonedx"
+          output: "${{ steps.docker_meta.outputs.version }}-bom.cdx.json"
 
       ###############################################
       # Push container image to registry and sign it
@@ -293,31 +318,43 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
         uses: sigstore/cosign-installer@v2
 
-      # - name: Sign image with a key
-      #   if: ${{ ( startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' ) && env.COSIGN_PRIVATE_KEY != '' && env.COSIGN_PRIVATE_KEY_PASSWORD != '' }}
-      #   run: |
-      #     set -euxo pipefail
-      #     echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign --key env://COSIGN_PRIVATE_KEY {}@${{ steps.build-push-action.outputs.digest }}
-      #     cosign public-key --key env://COSIGN_PRIVATE_KEY
-      #   env:
-      #     TAGS: ${{ steps.docker_meta.outputs.tags }}
-      #     COSIGN_PRIVATE_KEY: ${{ env.COSIGN_PRIVATE_KEY }}
-      #     COSIGN_PASSWORD: ${{ env.COSIGN_PRIVATE_KEY_PASSWORD }}
-
       - name: Sign the images with GitHub OIDC Token
         if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
         run: |
           set -euxo pipefail
-          echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign {}@${{ steps.build-push-action.outputs.digest }}
+          echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign {}@${{ steps.build-push-action-load.outputs.digest }}
         env:
-          TAGS: ${{ steps.docker_meta.outputs.tags }}
           COSIGN_EXPERIMENTAL: true
 
-      # Create release only in "main Dockerfile" pipeline task (others will skip this task)
-      - name: Create Release
-        if: ${{ startsWith(github.ref, 'refs/tags/') && endsWith(steps.docker_meta.outputs.tags, ':latest') }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Attach SBOM and sign it
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: |
           set -euxo pipefail
-          gh release create ${{ github.ref_name }} --generate-notes
+          cosign attach sbom --sbom ${{ steps.docker_meta.outputs.version }}-bom.cdx.json --type cyclonedx "${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}@${CONTAINER_IMAGE_DIGEST_TAG}"
+          gh release download --repo google/go-containerregistry --pattern go-containerregistry_Linux_x86_64.tar.gz --output - | tar xvz -C /usr/local/bin crane
+          crane mutate \
+            --label org.opencontainers.image.authors="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.authors'] }}" \
+            --label org.opencontainers.image.description="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.description'] }}" \
+            --label org.opencontainers.image.documentation="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.documentation'] }}" \
+            --label org.opencontainers.image.ref.name="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.ref.name'] }}" \
+            --label org.opencontainers.image.vendor="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.vendor'] }}" \
+            --label org.opencontainers.image.licenses="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.licenses'] }}" \
+            --label org.opencontainers.image.revision="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.revision'] }}" \
+            --label org.opencontainers.image.source="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.source'] }}" \
+            --label org.opencontainers.image.title="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.title'] }}" \
+            --label org.opencontainers.image.url="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.url'] }}" \
+            --label org.opencontainers.image.version="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.version'] }}" \
+            --label com.mycompany.image.expires.after="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.expires.after'] }}" \
+            --label com.mycompany.image.expires="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.expires'] }}" \
+            --label com.mycompany.image.pipeline.source="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.pipeline.source'] }}" \
+            --label com.mycompany.image.pipeline.url="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.pipeline.url'] }}" \
+            --label com.mycompany.image.product_id="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.product_id'] }}" \
+            --label com.mycompany.image.repository.url="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.repository.url'] }}" \
+            --label com.mycompany.image.used_for="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.used_for'] }}" \
+            --label quay.expires-after="${{ fromJSON(steps.docker_meta.outputs.json).labels['quay.expires-after'] }}" \
+            "${{ inputs.container_image_destination }}:${CONTAINER_IMAGE_DIGEST_TAG/:/-}.sbom"
+          cosign sign --attachment sbom "${{ inputs.container_image_destination }}:${CONTAINER_IMAGE_DIGEST_TAG/:/-}.sbom"
+        env:
+          CONTAINER_IMAGE_DIGEST_TAG: ${{ steps.build-push-action-load.outputs.digest }}
+          COSIGN_EXPERIMENTAL: true
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
