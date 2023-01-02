@@ -85,11 +85,14 @@ env:
   WIZ_CLIENT_SECRET: ${{ secrets.wiz_client_secret }}
   COSIGN_PRIVATE_KEY: ${{ secrets.cosign_private_key }}
   COSIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.cosign_private_key_password }}
+  COSIGN_EXPERIMENTAL: true
 
 jobs:
   container-build:
     runs-on: ubuntu-latest
     permissions:
+      contents: write
+      id-token: write
       security-events: write
     steps:
       - name: Checkout
@@ -323,8 +326,6 @@ jobs:
         run: |
           set -euxo pipefail
           echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign {}@${{ steps.build-push-action-load.outputs.digest }}
-        env:
-          COSIGN_EXPERIMENTAL: true
 
       - name: Attach SBOM and sign it
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
@@ -356,5 +357,4 @@ jobs:
           cosign sign --attachment sbom "${{ inputs.container_image_destination }}:${CONTAINER_IMAGE_DIGEST_TAG/:/-}.sbom"
         env:
           CONTAINER_IMAGE_DIGEST_TAG: ${{ steps.build-push-action-load.outputs.digest }}
-          COSIGN_EXPERIMENTAL: true
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
