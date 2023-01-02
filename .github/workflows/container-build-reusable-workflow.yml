@@ -327,11 +327,11 @@ jobs:
           format: "cyclonedx"
           output: "${{ steps.docker_meta.outputs.version }}-bom.cdx.json"
 
-      - name: Attach SBOM and sign it
+      - name: Attach SBOM
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: |
           set -euxo pipefail
-          cosign attach sbom --sbom ${{ steps.docker_meta.outputs.version }}-bom.cdx.json --type cyclonedx "${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}@${CONTAINER_IMAGE_DIGEST_TAG}"
+          cosign attach sbom --sbom ${{ steps.docker_meta.outputs.version }}-bom.cdx.json --type cyclonedx "${{ inputs.container_image_destination }}@${CONTAINER_IMAGE_DIGEST_TAG}"
           gh release download --repo google/go-containerregistry --pattern go-containerregistry_Linux_x86_64.tar.gz --output - | tar xvz -C /usr/local/bin crane
           crane mutate \
             --label org.opencontainers.image.authors="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.authors'] }}" \
@@ -354,7 +354,6 @@ jobs:
             --label com.mycompany.image.used_for="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.used_for'] }}" \
             --label quay.expires-after="${{ fromJSON(steps.docker_meta.outputs.json).labels['quay.expires-after'] }}" \
             "${{ inputs.container_image_destination }}:${CONTAINER_IMAGE_DIGEST_TAG/:/-}.sbom"
-          cosign sign "${{ inputs.container_image_destination }}:${CONTAINER_IMAGE_DIGEST_TAG/:/-}.sbom"
         env:
           CONTAINER_IMAGE_DIGEST_TAG: ${{ steps.build-push-action-load.outputs.digest }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
