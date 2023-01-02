@@ -149,7 +149,7 @@ jobs:
           tags: |
             # Whever the pipeline runs form "main" - use "latest" container tag
             type=raw,value=latest,enable={{is_default_branch}}
-            # When the pipeline is not excuted form 'main' branch use "pr-<mybranch>" tag
+            # When the pipeline is not excuted form 'main' branch use "br-<mybranch>" tag
             type=ref,prefix=br-,event=branch,enable=${{ github.ref_name != github.event.repository.default_branch }}
             type=semver,pattern={{version}},event=tag
             type=semver,pattern={{major}}.{{minor}},event=tag
