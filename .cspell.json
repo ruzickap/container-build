@@ -1,12 +1,20 @@
 {
   "ignoreWords": [
     "apiserver",
+    "bridgecrew",
+    "chainguard",
+    "costoolkit",
     "cryptominer",
+    "cyclonedx",
     "distroless",
+    "fromjson",
+    "jetstack",
     "metallb",
     "petr",
     "rekor",
     "ruzicka",
-    "skopeo"
+    "skopeo",
+    "slsaprovenance",
+    "thomasvitale"
   ]
 }
