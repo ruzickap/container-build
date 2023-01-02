@@ -11,28 +11,27 @@ Repository with images: <https://quay.io/repository/petr_ruzicka/myc-hello-kuber
 ### Generic
 
 - Multiple Dockerfile files in one repository
-- Multi-arch container images for each Dockerfile
+- [not done] Multi-arch container images for each Dockerfile
 - Image should be signed ([cosign](https://github.com/sigstore/cosign))
 - SBOM should be generated
 - Build process should never overwrite existing tags (1.2.3) in container
-  repository (doesn't apply for "latest" or "pr-")
-- Container image should be scanned for "Critical" vulnerabilities
-- Container scan failed (how to progress even when there are CRITICAL
-  vulnerabilities in the container)
+  repository (doesn't apply for "latest" or "br-")
+- Container image should be scanned for "Critical" vulnerabilities before it
+  is pushed to container registry
+- There should be a way to push container to registry also with CRITICAL
+  vulnerabilities (how to progress when there are CRITICAL vulnerabilities which
+  can not be fixed "immediately")
   - Set `container_image_vulnerability_checks=false`
 
 ### Tag specific
 
-- I want to build test container (with specific tag like
-  `myc-hello-kubernetes:5.1.2-test1` with expiration date)
-- I want to build test container for specific PR with expiration date
-- I want to build only `latest` tag manually?
-- `latest` tag should be built only form `main` branch...
+- I want to build test container for specific PR / branch with expiration date
+- I want to build only `latest` tag manually (form `main` branch)
 - Newly released images must create/update following tags in container
   repository (example):
   - `1`
   - `1.2`
-  - `1.2.0`
+  - `1.2.1`
   - `latest`
 
 ## Local tests
@@ -40,11 +39,11 @@ Repository with images: <https://quay.io/repository/petr_ruzicka/myc-hello-kuber
 Build commands:
 
 ```bash
-docker build -f ./src/app/Dockerfile -t myc-hello-kubernetes:latest src/app
-docker build -f ./src/app/Dockerfile-node-18-alpine -t myc-hello-kubernetes:latest-alpine src/app
+docker build -f ./src/app/Dockerfile                     -t myc-hello-kubernetes:latest             src/app
+docker build -f ./src/app/Dockerfile-node-18-alpine      -t myc-hello-kubernetes:latest-alpine      src/app
 docker build -f ./src/app/Dockerfile-node-18-debian-slim -t myc-hello-kubernetes:latest-debian-slim src/app
-docker build -f ./src/app/Dockerfile-nodejs18-distroless -t myc-hello-kubernetes:latest-distroless src/app
-docker build -f ./src/app/Dockerfile-nodejs-16-ubi -t myc-hello-kubernetes:latest-ubi src/app
+docker build -f ./src/app/Dockerfile-nodejs18-distroless -t myc-hello-kubernetes:latest-distroless  src/app
+docker build -f ./src/app/Dockerfile-nodejs-16-ubi       -t myc-hello-kubernetes:latest-ubi         src/app
 ```
 
 Run commands:
@@ -63,13 +62,12 @@ Debug container:
 
 ```bash
 docker run -it --rm --entrypoint=/bin/sh --user root -p 8080:8080 myc-hello-kubernetes:latest
-docker run --platform linux/arm64/v8 -it --rm --entrypoint=/bin/sh --user root -p 8080:8080 myc-hello-kubernetes:latest
 ```
 
 Run in Kubernetes:
 
 ```bash
-kubectl run myc-hello-kubernetes --image=quay.io/petr_ruzicka/myc-hello-kubernetes:latest
+kubectl run myc-hello-kubernetes --image=quay.io/petr_ruzicka/myc-hello-kubernetes
 ```
 
 ## Cosign - verify signatures / SBOMs
