@@ -32,6 +32,10 @@ on:
         description: "Container Image Label - Authors Name / Maintainers Name"
         type: string
         required: true
+      container_image_logo_url:
+        description: "Container Image Logo URL"
+        type: string
+        required: false
       container_image_repository_url:
         description: "Container Image Label - Repository URL"
         type: string
@@ -175,6 +179,7 @@ jobs:
             org.opencontainers.image.vendor=${{ inputs.container_image_vendor }}
             io.artifacthub.package.keywords=${{ steps.variables.outputs.GITHUB_REPOSITORY_TOPICS }}
             io.artifacthub.package.license=${{ github.event.repository.license.spdx_id }}
+            io.artifacthub.package.logo-url=${{ inputs.container_image_logo_url || 'https://raw.githubusercontent.com/kubernetes/community/487f994c013ea61d92cf9a341af7620037abbce3/icons/svg/resources/unlabeled/pod.svg' }}
             io.artifacthub.package.maintainers=[{"name":"${{ inputs.container_image_authors_name }}","email":"${{ inputs.container_image_authors }}"}]
             io.artifacthub.package.readme-url=https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/README.md
             com.mycompany.image.expires.after=${{ steps.variables.outputs.CONTAINER_IMAGE_EXPIRES_AFTER }}
