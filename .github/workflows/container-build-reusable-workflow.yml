@@ -340,29 +340,4 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: |
           set -euxo pipefail
-          cosign attach sbom --sbom ${{ steps.docker_meta.outputs.version }}-bom.cdx.json --type cyclonedx "${{ inputs.container_image_destination }}@${CONTAINER_IMAGE_DIGEST_TAG}"
-          gh release download --repo google/go-containerregistry --pattern go-containerregistry_Linux_x86_64.tar.gz --output - | tar xvz -C /usr/local/bin crane
-          crane mutate \
-            --label org.opencontainers.image.authors="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.authors'] }}" \
-            --label org.opencontainers.image.description="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.description'] }}" \
-            --label org.opencontainers.image.documentation="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.documentation'] }}" \
-            --label org.opencontainers.image.ref.name="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.ref.name'] }}" \
-            --label org.opencontainers.image.vendor="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.vendor'] }}" \
-            --label org.opencontainers.image.licenses="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.licenses'] }}" \
-            --label org.opencontainers.image.revision="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.revision'] }}" \
-            --label org.opencontainers.image.source="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.source'] }}" \
-            --label org.opencontainers.image.title="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.title'] }}" \
-            --label org.opencontainers.image.url="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.url'] }}" \
-            --label org.opencontainers.image.version="${{ fromJSON(steps.docker_meta.outputs.json).labels['org.opencontainers.image.version'] }}" \
-            --label com.mycompany.image.expires.after="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.expires.after'] }}" \
-            --label com.mycompany.image.expires="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.expires'] }}" \
-            --label com.mycompany.image.pipeline.source="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.pipeline.source'] }}" \
-            --label com.mycompany.image.pipeline.url="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.pipeline.url'] }}" \
-            --label com.mycompany.image.product_id="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.product_id'] }}" \
-            --label com.mycompany.image.repository.url="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.repository.url'] }}" \
-            --label com.mycompany.image.used_for="${{ fromJSON(steps.docker_meta.outputs.json).labels['com.mycompany.image.used_for'] }}" \
-            --label quay.expires-after="${{ fromJSON(steps.docker_meta.outputs.json).labels['quay.expires-after'] }}" \
-            "${{ inputs.container_image_destination }}:${CONTAINER_IMAGE_DIGEST_TAG/:/-}.sbom"
-        env:
-          CONTAINER_IMAGE_DIGEST_TAG: ${{ steps.build-push-action-load.outputs.digest }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          cosign attest --predicate ${{ steps.docker_meta.outputs.version }}-bom.cdx.json --type cyclonedx "${{ inputs.container_image_destination }}@${{ steps.build-push-action-load.outputs.digest }}"
