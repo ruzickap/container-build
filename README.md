@@ -90,11 +90,21 @@ Test commands:
 ```bash
 IMAGE="bridgecrew/checkov"
 IMAGE="quay.io/petr_ruzicka/malware-cryptominer-container:1.4.0"
+IMAGE="ghcr.io/external-secrets/external-secrets:v0.7.1"
 export COSIGN_EXPERIMENTAL=1
+
 cosign verify "${IMAGE}" | jq
 cosign tree "${IMAGE}"
 cosign download sbom "${IMAGE}"
 cosign verify-attestation --type cyclonedx "${IMAGE}"
+cosign verify-attestation --type cyclonedx "${IMAGE}" | jq '.payload |= @base64d | .payload | fromjson'
+
+trivy image --debug --sbom-sources rekor "${IMAGE}"
+
+cosign verify-attestation --type slsaprovenance "${IMAGE}"
+
+cosign verify-attestation --type cyclonedx "${IMAGE}" | jq -r '.payload' | base64 -d | jq -r '.predicate.Data' > /tmp/sbom.cdx.json
+trivy sbom /tmp/sbom.cdx.json
 ```
 
 Test commands with other images:
@@ -106,10 +116,11 @@ IMAGE="quay.io/cilium/cilium:v1.13.0-rc3"
 IMAGE="quay.io/metallb/controller:latest"
 IMAGE="quay.io/costoolkit/elemental-operator:v1.1.0"
 IMAGE="bridgecrew/checkov"
+export COSIGN_EXPERIMENTAL=1
 
 skopeo inspect --raw "docker://${IMAGE}"
-COSIGN_EXPERIMENTAL=1 cosign verify "${IMAGE}" | jq
-COSIGN_EXPERIMENTAL=1 cosign verify "${IMAGE}" | jq -r '.[].optional| .Issuer + "-" + .Subject'
+cosign verify "${IMAGE}" | jq
+cosign verify "${IMAGE}" | jq -r '.[].optional| .Issuer + "-" + .Subject'
 cosign triangulate "${IMAGE}"
 cosign tree "${IMAGE}"
 
@@ -133,9 +144,9 @@ curl -s -H 'Accept: application/vnd.docker.distribution.manifest.list.v2+json' "
 curl -s -H 'Accept: application/vnd.oci.image.index.v1+json' "https://quay.io/v2/jetstack/cert-manager-controller/manifests/v1.9.1" | jq
 
 # Verify SBOM attestation
-COSIGN_EXPERIMENTAL=1 cosign verify-attestation --type cyclonedx bridgecrew/checkov | jq '.payload |= @base64d | .payload | fromjson | select(.predicateType == "https://cyclonedx.org/schema") | .predicate.Data'
-COSIGN_EXPERIMENTAL=1 cosign verify-attestation --type slsaprovenance --key https://ftp.suse.com/pub/projects/security/keys/container–key.pem registry.suse.com/bci/golang@sha256:35bc38ce40811b587a56bcfa328ef077c0703732e3bbedf4dbdf47f612cca04b | jq
-COSIGN_EXPERIMENTAL=1 cosign verify-attestation --type slsaprovenance ghcr.io/thomasvitale/band-service@sha256:388e8d292b55a7934bdaf11277ea9f33c3533258de92eb4b12085717dbdbd875 | jq '.payload |= @base64d | .payload | fromjson'
+cosign verify-attestation --type cyclonedx bridgecrew/checkov | jq '.payload |= @base64d | .payload | fromjson | select(.predicateType == "https://cyclonedx.org/schema") | .predicate.Data'
+cosign verify-attestation --type slsaprovenance --key https://ftp.suse.com/pub/projects/security/keys/container–key.pem registry.suse.com/bci/golang@sha256:35bc38ce40811b587a56bcfa328ef077c0703732e3bbedf4dbdf47f612cca04b | jq
+cosign verify-attestation --type slsaprovenance ghcr.io/thomasvitale/band-service@sha256:388e8d292b55a7934bdaf11277ea9f33c3533258de92eb4b12085717dbdbd875 | jq '.payload |= @base64d | .payload | fromjson'
 
 docker manifest inspect quay.io/jetstack/cert-manager-controller:v1.9.1
 
