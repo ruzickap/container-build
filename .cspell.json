@@ -15,6 +15,7 @@
     "ruzicka",
     "skopeo",
     "slsaprovenance",
-    "thomasvitale"
+    "thomasvitale",
+    "trivy"
   ]
 }
