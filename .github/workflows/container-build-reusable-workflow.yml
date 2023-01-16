@@ -356,7 +356,7 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: |
           set -euxo pipefail
-          cosign attest --predicate "${{ steps.variables.outputs.CONTAINER_REGISTRY }}-${{ steps.variables.outputs.CONTAINER_IMAGE_NAME }}-${{ steps.docker_meta.outputs.version }}-bom.cdx.json" --type cyclonedx "${{ inputs.container_image_destination }}@${CONTAINER_IMAGE_DIGEST_TAG}"
+          cosign attest --yes --predicate "${{ steps.variables.outputs.CONTAINER_REGISTRY }}-${{ steps.variables.outputs.CONTAINER_IMAGE_NAME }}-${{ steps.docker_meta.outputs.version }}-bom.cdx.json" --type cyclonedx "${{ inputs.container_image_destination }}@${CONTAINER_IMAGE_DIGEST_TAG}"
           cosign verify-attestation --type cyclonedx "${{ inputs.container_image_destination }}@${CONTAINER_IMAGE_DIGEST_TAG}" | jq '.payload |= @base64d | .payload | fromjson'
         env:
           CONTAINER_IMAGE_DIGEST_TAG: ${{ steps.build-push-action-load.outputs.digest }}

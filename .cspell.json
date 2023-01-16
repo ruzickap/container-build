@@ -16,6 +16,7 @@
     "skopeo",
     "slsaprovenance",
     "thomasvitale",
+    "tostring",
     "trivy"
   ]
 }
