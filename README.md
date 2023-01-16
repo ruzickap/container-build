@@ -89,22 +89,21 @@ Test commands:
 
 ```bash
 IMAGE="bridgecrew/checkov"
-IMAGE="quay.io/petr_ruzicka/malware-cryptominer-container:1.4.0"
+IMAGE="quay.io/petr_ruzicka/malware-cryptominer-container:1.4.1"
 IMAGE="ghcr.io/external-secrets/external-secrets:v0.7.1"
 export COSIGN_EXPERIMENTAL=1
 
 cosign verify "${IMAGE}" | jq
+cosign verify "${IMAGE}" | jq -r '.[].optional| .Issuer + " | " + .Subject + " | " + .githubWorkflowRef + " | https://rekor.tlog.dev/?logIndex=" + (.Bundle.Payload.logIndex|tostring)'
+cosign triangulate "${IMAGE}"
 cosign tree "${IMAGE}"
-cosign download sbom "${IMAGE}"
 cosign verify-attestation --type cyclonedx "${IMAGE}"
 cosign verify-attestation --type cyclonedx "${IMAGE}" | jq '.payload |= @base64d | .payload | fromjson'
-
 trivy image --debug --sbom-sources rekor "${IMAGE}"
-
-cosign verify-attestation --type slsaprovenance "${IMAGE}"
-
 cosign verify-attestation --type cyclonedx "${IMAGE}" | jq -r '.payload' | base64 -d | jq -r '.predicate.Data' > /tmp/sbom.cdx.json
 trivy sbom /tmp/sbom.cdx.json
+
+cosign verify-attestation --type slsaprovenance "${IMAGE}"
 ```
 
 Test commands with other images:
