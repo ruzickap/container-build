@@ -149,6 +149,9 @@ cosign verify-attestation --type slsaprovenance ghcr.io/thomasvitale/band-servic
 
 docker manifest inspect quay.io/jetstack/cert-manager-controller:v1.9.1
 
+
+slsa-verifier verify-image "ghcr.io/chgl/kube-powertools@sha256:b76dc742957ae883f3ed0c4fe89b54d5c9a9de69a8bc531f9ee12ec995dab10d" --source-uri github.com/chgl/kube-powertools
+
 https://registry-ui.chainguard.app/?image=quay.io/petr_ruzicka/malware-cryptominer-container:1
 https://registry-ui.chainguard.app/?image=cgr.dev/chainguard/nginx:latest
 ```
