@@ -407,7 +407,7 @@ jobs:
     secrets:
       registry-password: "${{ secrets.GITHUB_TOKEN }}"
 
-  container-registery-provenance:
+  container-registry-provenance:
     if: ${{ startsWith(github.ref, 'refs/tags/') }}
     needs:
       - container-build
