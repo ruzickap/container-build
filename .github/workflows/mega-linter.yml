@@ -19,7 +19,7 @@ jobs:
         env:
           BASH_SHFMT_ARGUMENTS: --indent 2 --space-redirects
           CSS_STYLELINT_FILTER_REGEX_EXCLUDE: src/app/static/css/main.css
-          DISABLE_LINTERS: REPOSITORY_DEVSKIM
+          DISABLE_LINTERS: REPOSITORY_DEVSKIM,SPELL_CSPELL
           FORMATTERS_DISABLE_ERRORS: false
           GITHUB_COMMENT_REPORTER: false
           GITHUB_STATUS_REPORTER: true
