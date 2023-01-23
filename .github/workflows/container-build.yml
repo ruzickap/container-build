@@ -19,11 +19,10 @@ on:
         required: false
         default: "Never"
       push_to_ghcr:
-        description: "Push also to ghcr.io (GitHub)"
+        description: "If 'Push the image to Container Registry' is enabled - push image to ghcr.io too"
         type: boolean
         required: false
         default: true
-
   push:
     tags:
       # For code tagging use 'v' prefix, but 'v' prefix should not be part of container tag
@@ -69,10 +68,10 @@ jobs:
       container_image_logo_url: https://raw.githubusercontent.com/cncf/artwork/40e2e8948509b40e4bad479446aaec18d6273bf2/projects/kubernetes/icon/color/kubernetes-icon-color.svg
       container_image_repository_url: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
       container_image_expires_after: ${{ inputs.container_image_expires_after || 'Never' }} # days
-      # https://github.com/actions/runner/issues/1483
-      container_registry_push: ${{ inputs.container_registry_push == true && true || false }}
+      # https://github.com/actions/runner/issues/1483 (there are no "inputs" when not running using 'workflow_dispatch')
       container_image_skip_vulnerability_checks: ${{ inputs.container_image_skip_vulnerability_checks == true && true || false }}
-      push_to_ghcr: ${{ inputs.push_to_ghcr }}
+      container_registry_push: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'schedule' || inputs.container_registry_push }}
+      push_to_ghcr: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'schedule' || ( inputs.container_registry_push && inputs.push_to_ghcr ) }}
     secrets:
       container_registry_user: ${{ secrets.CONTAINER_REGISTRY_USER }}
       container_registry_password: ${{ secrets.CONTAINER_REGISTRY_PASSWORD }}
