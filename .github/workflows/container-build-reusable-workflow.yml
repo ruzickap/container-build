@@ -325,14 +325,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker push
-        uses: docker/build-push-action@v3
         if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
-        with:
-          file: ${{ inputs.container_image_dockerfile_location }}
-          context: ${{ steps.variables.outputs.CONTAINER_IMAGE_DOCKER_BUILD_DIRECTORY }}
-          push: true
-          tags: ${{ steps.docker_meta.outputs.tags }}
-          labels: ${{ steps.docker_meta.outputs.labels }}
+        run: |
+          set -euxo pipefail
+          echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} docker push {}
 
       - name: Install Cosign
         if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}

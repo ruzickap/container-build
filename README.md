@@ -89,7 +89,7 @@ Test commands:
 
 ```bash
 IMAGE="bridgecrew/checkov"
-IMAGE="quay.io/petr_ruzicka/malware-cryptominer-container:1.4.1"
+IMAGE="quay.io/petr_ruzicka/malware-cryptominer-container:1.4.4"
 IMAGE="ghcr.io/external-secrets/external-secrets:v0.7.1"
 export COSIGN_EXPERIMENTAL=1
 
@@ -102,7 +102,6 @@ cosign verify-attestation --type cyclonedx "${IMAGE}" | jq '.payload |= @base64d
 trivy image --debug --sbom-sources rekor "${IMAGE}"
 cosign verify-attestation --type cyclonedx "${IMAGE}" | jq -r '.payload' | base64 -d | jq -r '.predicate.Data' > /tmp/sbom.cdx.json
 trivy sbom /tmp/sbom.cdx.json
-
 cosign verify-attestation --type slsaprovenance "${IMAGE}"
 ```
 
@@ -169,7 +168,7 @@ https://registry-ui.chainguard.app/?image=cgr.dev/chainguard/nginx:latest
 - Tag "main" branch
 
   ```bash
-  TAG="8.0.28"
+  TAG="8.0.49"
 
   git tag "v${TAG}-beta.0" && git push origin "v${TAG}-beta.0"
   sleep 10
