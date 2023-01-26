@@ -93,16 +93,17 @@ IMAGE="quay.io/petr_ruzicka/malware-cryptominer-container:1.4.4"
 IMAGE="ghcr.io/external-secrets/external-secrets:v0.7.1"
 export COSIGN_EXPERIMENTAL=1
 
+docker buildx imagetools inspect "${IMAGE}"
 cosign verify "${IMAGE}" | jq
 cosign verify "${IMAGE}" | jq -r '.[].optional| .Issuer + " | " + .Subject + " | " + .githubWorkflowRef + " | https://rekor.tlog.dev/?logIndex=" + (.Bundle.Payload.logIndex|tostring)'
 cosign triangulate "${IMAGE}"
 cosign tree "${IMAGE}"
+cosign verify-attestation --type slsaprovenance "${IMAGE}"
 cosign verify-attestation --type cyclonedx "${IMAGE}"
 cosign verify-attestation --type cyclonedx "${IMAGE}" | jq '.payload |= @base64d | .payload | fromjson'
 trivy image --debug --sbom-sources rekor "${IMAGE}"
 cosign verify-attestation --type cyclonedx "${IMAGE}" | jq -r '.payload' | base64 -d | jq -r '.predicate.Data' > /tmp/sbom.cdx.json
 trivy sbom /tmp/sbom.cdx.json
-cosign verify-attestation --type slsaprovenance "${IMAGE}"
 ```
 
 Test commands with other images:
@@ -151,8 +152,26 @@ docker manifest inspect quay.io/jetstack/cert-manager-controller:v1.9.1
 
 slsa-verifier verify-image "ghcr.io/chgl/kube-powertools@sha256:b76dc742957ae883f3ed0c4fe89b54d5c9a9de69a8bc531f9ee12ec995dab10d" --source-uri github.com/chgl/kube-powertools
 
+# https://unifiedguru.com/highlights-from-the-buildkit-v0-11-release-docker/
+docker buildx imagetools inspect moby/buildkit:latest --format '{{ json .Provenance }}'
+docker buildx imagetools inspect moby/buildkit:latest --format '{{ json (index .Provenance "linux/amd64").SLSA.invocation.configSource }}'
+docker buildx imagetools inspect moby/buildkit:latest --format '{{ (index .Provenance "linux/amd64").SLSA.builder.id }}'
+docker buildx imagetools inspect moby/buildkit:latest --format '{{ range (index .SBOM "linux/amd64").SPDX.packages }}{{ println .name }}{{ end }}'
+
 https://registry-ui.chainguard.app/?image=quay.io/petr_ruzicka/malware-cryptominer-container:1
 https://registry-ui.chainguard.app/?image=cgr.dev/chainguard/nginx:latest
+```
+
+## Container scanners
+
+I was looking for the vulnerability which affects only the specific architecture
+(for example: `arm`):
+
+<https://security.snyk.io/vuln/SNYK-DEBIAN10-GLIBC-564233>
+
+```bash
+trivy image --severity HIGH,CRITICAL --platform=linux/amd64 node:18.10.0-buster-slim | grep CVE-2020-6096
+trivy image --severity HIGH,CRITICAL --platform=linux/arm64 node:18.10.0-buster-slim | grep CVE-2020-6096
 ```
 
 ## Possible build examples
@@ -168,7 +187,7 @@ https://registry-ui.chainguard.app/?image=cgr.dev/chainguard/nginx:latest
 - Tag "main" branch
 
   ```bash
-  TAG="8.0.49"
+  TAG="8.0.50"
 
   git tag "v${TAG}-beta.0" && git push origin "v${TAG}-beta.0"
   sleep 10
@@ -234,15 +253,14 @@ https://registry-ui.chainguard.app/?image=cgr.dev/chainguard/nginx:latest
   ```bash
   git checkout -b fix2
   date > date
-  git add date && git commit -m "date" && git push
+  git add date && git commit -m "fix(container-build): date" && git push
   PR_URL=$(gh pr create --fill)
   gh workflow run container-build.yml --ref=fix2 -f container_registry_push=true -f container_image_expires_after=30 -f container_image_skip_vulnerability_checks=true
   sleep 10
   WORKLOAD_ID=$(gh run list --workflow=container-build.yml --limit 1 --json databaseId | jq -r '.[].databaseId')
   gh run watch "${WORKLOAD_ID}"
-  sleep 100
   date > date
-  git add date && git commit -m "date2" && git push
+  git add date && git commit -m "fix(container-build): date2" && git push
   gh workflow run container-build.yml --ref=fix2  -f container_registry_push=true -f container_image_expires_after=30 -f container_image_skip_vulnerability_checks=true
   sleep 10
   WORKLOAD_ID=$(gh run list --workflow=container-build.yml --limit 1 --json databaseId | jq -r '.[].databaseId')
