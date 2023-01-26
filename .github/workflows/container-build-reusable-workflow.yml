@@ -36,6 +36,11 @@ on:
         description: "Container Image Logo URL"
         type: string
         required: false
+      container_image_platforms:
+        description: "Container image platforms"
+        type: string
+        required: false
+        default: linux/amd64,linux/arm64
       container_image_repository_url:
         description: "Container Image Label - Repository URL"
         type: string
@@ -107,41 +112,14 @@ jobs:
       contents: write
       id-token: write
       packages: write
-      security-events: write
+    concurrency:
+      group: container-build-reusable-workflow-${{ inputs.container_image_dockerfile_location }}-${{ inputs.container_image_destination }}
     outputs:
-      container_image_digest: ${{ steps.build-push-action-load.outputs.digest }}
+      container_image_digest: ${{ steps.build-push-action-container-registry.outputs.digest }}
       container_image_name: ${{ steps.variables.outputs.CONTAINER_IMAGE_NAME }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Set GitHub variables
-        id: variables
-        env:
-          CONTAINER_IMAGE_DOCKERFILE_LOCATION: ${{ inputs.container_image_dockerfile_location }}
-          CONTAINER_IMAGE_DESTINATION: ${{ inputs.container_image_destination }}
-          CONTAINER_IMAGE_EXPIRES_AFTER: ${{ inputs.container_image_expires_after }}
-        run: |
-          set -euxo pipefail
-          echo "${CONTAINER_IMAGE_DESTINATION}" | awk -F / '{print "CONTAINER_REGISTRY="$1}' | tee -a "${GITHUB_OUTPUT}"
-          echo "CONTAINER_IMAGE_NAME=$(basename "${CONTAINER_IMAGE_DESTINATION}")" | tee -a "${GITHUB_OUTPUT}"
-          echo "CONTAINER_IMAGE_DOCKER_BUILD_DIRECTORY=$(dirname "${CONTAINER_IMAGE_DOCKERFILE_LOCATION}")" | tee -a "${GITHUB_OUTPUT}"
-          CONTAINER_IMAGE_BASE_IMAGE=$(awk '/^FROM/ {a=$2} END{print a}' "${CONTAINER_IMAGE_DOCKERFILE_LOCATION}")
-          docker pull --quiet "${CONTAINER_IMAGE_BASE_IMAGE}"
-          # Add 'docker.io' to base container images which are missing it
-          echo "${CONTAINER_IMAGE_BASE_IMAGE}" | grep -E '[^.]+\..+:' || CONTAINER_IMAGE_BASE_IMAGE="docker.io/${CONTAINER_IMAGE_BASE_IMAGE}"
-          echo "CONTAINER_IMAGE_BASE_IMAGE=${CONTAINER_IMAGE_BASE_IMAGE}" | tee -a "${GITHUB_OUTPUT}"
-          CONTAINER_IMAGE_BASE_IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${CONTAINER_IMAGE_BASE_IMAGE}" | cut -d @ -f 2)
-          echo "CONTAINER_IMAGE_BASE_IMAGE_DIGEST=${CONTAINER_IMAGE_BASE_IMAGE_DIGEST}" | tee -a "${GITHUB_OUTPUT}"
-          echo '${{ toJSON(github.event.repository.topics) }}' | jq -r '. | join(",") | "GITHUB_REPOSITORY_TOPICS=\(.)"' | tee -a "${GITHUB_OUTPUT}"
-          # Set variables for com.mycompany.image.expires.after and com.mycompany.image.expires
-          if [[ "${CONTAINER_IMAGE_EXPIRES_AFTER}" = "Never" ]]; then
-            echo "CONTAINER_IMAGE_EXPIRES=Never" | tee -a "${GITHUB_OUTPUT}"
-            echo "CONTAINER_IMAGE_EXPIRES_AFTER=Never" | tee -a "${GITHUB_OUTPUT}"
-          else
-            echo "CONTAINER_IMAGE_EXPIRES=$(date -u --date="+${CONTAINER_IMAGE_EXPIRES_AFTER} days" +'%FT%TZ')" | tee -a "${GITHUB_OUTPUT}"
-            echo "CONTAINER_IMAGE_EXPIRES_AFTER=${CONTAINER_IMAGE_EXPIRES_AFTER}d" | tee -a "${GITHUB_OUTPUT}"
-          fi
 
       - name: Check if the tag exists in registry
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
@@ -155,6 +133,142 @@ jobs:
           else
             echo "*** Container tag \"${{ inputs.container_image_destination }}:${CONTAINER_IMAGE_TAG}\" doesn't exist..."
           fi
+
+      - name: Set GitHub variable - container_image_docker_build_directory
+        id: container_image_docker_build_directory
+        run: |
+          set -euxo pipefail
+          echo "CONTAINER_IMAGE_DOCKER_BUILD_DIRECTORY=$(dirname "${{ inputs.container_image_dockerfile_location }}")" | tee -a "${GITHUB_OUTPUT}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build temporary container and push it to local registry
+        uses: docker/build-push-action@v3
+        id: build-push-action-temporary-container-registry
+        with:
+          file: ${{ inputs.container_image_dockerfile_location }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          context: ${{ steps.container_image_docker_build_directory.outputs.CONTAINER_IMAGE_DOCKER_BUILD_DIRECTORY }}
+          load: true
+          tags: temporary_container-${{ github.run_id }}:latest
+
+      #########################
+      # Trivy Scanner
+      #########################
+
+      - name: Trivy - scan container image
+        uses: aquasecurity/trivy-action@master
+        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' }}
+        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+        with:
+          image-ref: temporary_container-${{ github.run_id }}:latest
+          exit-code: 1
+          ignore-unfixed: true
+          severity: CRITICAL
+
+      #########################
+      # Anchore - Grype
+      #########################
+
+      - name: Grype - scan container image
+        uses: anchore/scan-action@v3
+        # Continue whenever container was built (no matter if previous scanner failed)
+        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' }}
+        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+        with:
+          image: temporary_container-${{ github.run_id }}:latest
+          severity-cutoff: critical
+          output-format: table
+
+      #########################
+      # Snyk Scanner
+      #########################
+
+      - name: Snyk - scan container image
+        uses: snyk/actions/docker@master
+        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.SNYK_TOKEN != '' }}
+        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+        env:
+          SNYK_TOKEN: ${{ env.SNYK_TOKEN }}
+        with:
+          image: temporary_container-${{ github.run_id }}:latest
+          args: --file=${{ inputs.container_image_dockerfile_location }} --severity-threshold=high
+
+      #########################
+      # Prisma Cloud Scanner
+      #########################
+
+      - name: Prisma Cloud - scan container image
+        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' }}
+        uses: PaloAltoNetworks/prisma-cloud-scan@v1
+        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+        with:
+          pcc_console_url: ${{ env.PCC_CONSOLE_URL }}
+          pcc_user: ${{ env.PCC_USER }}
+          pcc_pass: ${{ env.PCC_PASS }}
+          image_name: temporary_container-${{ github.run_id }}:latest
+
+      #########################
+      # Wiz Scanner
+      #########################
+
+      - name: Wiz - scan container image
+        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.WIZ_CLIENT_ID != '' && env.WIZ_CLIENT_SECRET != '' }}
+        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+        env:
+          WIZ_CLIENT_ID: ${{ env.WIZ_CLIENT_ID }}
+          WIZ_CLIENT_SECRET: ${{ env.WIZ_CLIENT_SECRET }}
+          CONTAINER_IMAGE_DESTINATION: ${{ inputs.container_image_destination }}
+        run: |
+          set -euxo pipefail
+          curl -s -o wizcli https://wizcli.app.wiz.io/wizcli && chmod +x wizcli
+          ./wizcli auth --id "${WIZ_CLIENT_ID}" --secret "${WIZ_CLIENT_SECRET}"
+          ./wizcli docker scan --image "temporary_container-${{ github.run_id }}:latest" --tag product_id="${{ inputs.container_image_product_id }}"
+
+      ###############################################
+      # Push container image to registry and sign it
+      ###############################################
+
+      - name: Set GitHub variables
+        id: variables
+        env:
+          CONTAINER_IMAGE_DOCKERFILE_LOCATION: ${{ inputs.container_image_dockerfile_location }}
+          CONTAINER_IMAGE_DESTINATION: ${{ inputs.container_image_destination }}
+          CONTAINER_IMAGE_EXPIRES_AFTER: ${{ inputs.container_image_expires_after }}
+        run: |
+          set -euxo pipefail
+          echo "${CONTAINER_IMAGE_DESTINATION}" | awk -F / '{print "CONTAINER_REGISTRY="$1}' | tee -a "${GITHUB_OUTPUT}"
+          echo "CONTAINER_IMAGE_NAME=$(basename "${CONTAINER_IMAGE_DESTINATION}")" | tee -a "${GITHUB_OUTPUT}"
+          # Get details about baqse image form the temporarily built container
+          echo '${{ steps.build-push-action-temporary-container-registry.outputs.metadata }}' | jq -r '."containerimage.buildinfo".sources[-1].ref | "CONTAINER_IMAGE_BASE_IMAGE=\(.)"' | tee -a "${GITHUB_OUTPUT}"
+          echo '${{ steps.build-push-action-temporary-container-registry.outputs.metadata }}' | jq -r '."containerimage.buildinfo".sources[-1].pin | "CONTAINER_IMAGE_BASE_IMAGE_DIGEST=\(.)"' | tee -a "${GITHUB_OUTPUT}"
+          echo '${{ toJSON(github.event.repository.topics) }}' | jq -r '. | join(",") | "GITHUB_REPOSITORY_TOPICS=\(.)"' | tee -a "${GITHUB_OUTPUT}"
+          # Set variables for com.mycompany.image.expires.after and com.mycompany.image.expires
+          if [[ "${CONTAINER_IMAGE_EXPIRES_AFTER}" = "Never" ]]; then
+            echo "CONTAINER_IMAGE_EXPIRES=Never" | tee -a "${GITHUB_OUTPUT}"
+            echo "CONTAINER_IMAGE_EXPIRES_AFTER=Never" | tee -a "${GITHUB_OUTPUT}"
+          else
+            echo "CONTAINER_IMAGE_EXPIRES=$(date -u --date="+${CONTAINER_IMAGE_EXPIRES_AFTER} days" +'%FT%TZ')" | tee -a "${GITHUB_OUTPUT}"
+            echo "CONTAINER_IMAGE_EXPIRES_AFTER=${CONTAINER_IMAGE_EXPIRES_AFTER}d" | tee -a "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Login to container registry - ${{ steps.variables.outputs.CONTAINER_REGISTRY }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ steps.variables.outputs.CONTAINER_REGISTRY }}
+          username: ${{ secrets.container_registry_user }}
+          password: ${{ secrets.container_registry_password }}
+
+      - name: Login to container registry - ghcr.io
+        if: ${{ ( startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' ) && inputs.push_to_ghcr }}
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker meta
         id: docker_meta
@@ -202,133 +316,20 @@ jobs:
             com.mycompany.image.used_for=all
             quay.expires-after=${{ steps.variables.outputs.CONTAINER_IMAGE_EXPIRES_AFTER }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Docker build
-        uses: docker/build-push-action@v3
-        id: build-push-action-load
+      - name: Docker build and push
+        uses: docker/build-push-action@v3.3.0
+        id: build-push-action-container-registry
         with:
           file: ${{ inputs.container_image_dockerfile_location }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          context: ${{ steps.variables.outputs.CONTAINER_IMAGE_DOCKER_BUILD_DIRECTORY }}
-          load: true
+          context: ${{ steps.container_image_docker_build_directory.outputs.CONTAINER_IMAGE_DOCKER_BUILD_DIRECTORY }}
+          push: true
+          platforms: ${{ inputs.container_image_platforms }}
+          provenance: false
+          sbom: false
           tags: ${{ steps.docker_meta.outputs.tags }}
           labels: ${{ steps.docker_meta.outputs.labels }}
-
-      #########################
-      # Trivy Scanner
-      #########################
-
-      - name: Trivy - scan container image
-        uses: aquasecurity/trivy-action@master
-        if: ${{ always() && steps.build-push-action-load.outcome == 'success' }}
-        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
-        with:
-          image-ref: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
-          exit-code: 1
-          ignore-unfixed: true
-          severity: CRITICAL
-
-      #########################
-      # Anchore - Grype
-      #########################
-
-      - name: Grype - scan container image
-        uses: anchore/scan-action@v3
-        # Continue whenever container was built (no matter if previous scanner failed)
-        if: ${{ always() && steps.build-push-action-load.outcome == 'success' }}
-        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
-        with:
-          image: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
-          severity-cutoff: critical
-          output-format: table
-
-      #########################
-      # Snyk Scanner
-      #########################
-
-      - name: Snyk - scan container image
-        uses: snyk/actions/docker@master
-        if: ${{ always() && steps.build-push-action-load.outcome == 'success' && env.SNYK_TOKEN != '' }}
-        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
-        env:
-          SNYK_TOKEN: ${{ env.SNYK_TOKEN }}
-        with:
-          image: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
-          args: --file=${{ inputs.container_image_dockerfile_location }} --severity-threshold=high
-
-      - name: Snyk - upload SARIF file
-        uses: github/codeql-action/upload-sarif@v2
-        if: ${{ always() && steps.build-push-action-load.outcome == 'success' && env.SNYK_TOKEN != '' }}
-        with:
-          sarif_file: snyk.sarif
-
-      #########################
-      # Prisma Cloud Scanner
-      #########################
-
-      - name: Prisma Cloud - scan container image
-        if: ${{ always() && steps.build-push-action-load.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' }}
-        id: prisma-cloud-scan
-        uses: PaloAltoNetworks/prisma-cloud-scan@v1
-        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
-        with:
-          pcc_console_url: ${{ env.PCC_CONSOLE_URL }}
-          pcc_user: ${{ env.PCC_USER }}
-          pcc_pass: ${{ env.PCC_PASS }}
-          image_name: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
-
-      - name: Prisma Cloud - upload SARIF file
-        if: ${{ always() && steps.build-push-action-load.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' }}
-        uses: github/codeql-action/upload-sarif@v2
-        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
-        with:
-          sarif_file: ${{ steps.prisma-cloud-scan.outputs.sarif_file }}
-
-      #########################
-      # Wiz Scanner
-      #########################
-
-      - name: Wiz - scan container image
-        if: ${{ always() && steps.build-push-action-load.outcome == 'success' && env.WIZ_CLIENT_ID != '' && env.WIZ_CLIENT_SECRET != '' }}
-        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
-        env:
-          WIZ_CLIENT_ID: ${{ env.WIZ_CLIENT_ID }}
-          WIZ_CLIENT_SECRET: ${{ env.WIZ_CLIENT_SECRET }}
-          CONTAINER_IMAGE_DESTINATION: ${{ inputs.container_image_destination }}
-        run: |
-          set -euxo pipefail
-          curl -s -o wizcli https://wizcli.app.wiz.io/wizcli && chmod +x wizcli
-          ./wizcli auth --id "$WIZ_CLIENT_ID" --secret "$WIZ_CLIENT_SECRET"
-          ./wizcli docker scan --image "${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}" --tag product_id="${{ inputs.container_image_product_id }}"
-
-      ###############################################
-      # Push container image to registry and sign it
-      ###############################################
-
-      - name: Login to container registry - ${{ steps.variables.outputs.CONTAINER_REGISTRY }}
-        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
-        uses: docker/login-action@v2
-        with:
-          registry: ${{ steps.variables.outputs.CONTAINER_REGISTRY }}
-          username: ${{ secrets.container_registry_user }}
-          password: ${{ secrets.container_registry_password }}
-
-      - name: Login to container registry - ghcr.io
-        if: ${{ ( startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' ) && inputs.push_to_ghcr }}
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Docker push
-        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
-        run: |
-          set -euxo pipefail
-          echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} docker push {}
 
       - name: Install Cosign
         if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
@@ -338,7 +339,7 @@ jobs:
         if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
         run: |
           set -euxo pipefail
-          echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign {}@${{ steps.build-push-action-load.outputs.digest }}
+          echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign {}@${{ steps.build-push-action-container-registry.outputs.digest }}
 
       #########################
       # SBOM
@@ -346,7 +347,7 @@ jobs:
 
       - name: Trivy - create SBOM - ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
         uses: aquasecurity/trivy-action@master
-        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push }}
         with:
           image-ref: ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
           scan-type: image
@@ -354,18 +355,18 @@ jobs:
           output: ${{ steps.variables.outputs.CONTAINER_REGISTRY }}-${{ steps.variables.outputs.CONTAINER_IMAGE_NAME }}-${{ steps.docker_meta.outputs.version }}-bom.cdx.json
 
       - name: Attach SBOM - ${{ inputs.container_image_destination }}:${{ steps.docker_meta.outputs.version }}
-        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push }}
         run: |
           set -euxo pipefail
           cosign attest --yes --predicate "${{ steps.variables.outputs.CONTAINER_REGISTRY }}-${{ steps.variables.outputs.CONTAINER_IMAGE_NAME }}-${{ steps.docker_meta.outputs.version }}-bom.cdx.json" --type cyclonedx "${{ inputs.container_image_destination }}@${CONTAINER_IMAGE_DIGEST_TAG}"
           cosign verify-attestation --type cyclonedx "${{ inputs.container_image_destination }}@${CONTAINER_IMAGE_DIGEST_TAG}" | jq '.payload |= @base64d | .payload | fromjson'
         env:
-          CONTAINER_IMAGE_DIGEST_TAG: ${{ steps.build-push-action-load.outputs.digest }}
+          CONTAINER_IMAGE_DIGEST_TAG: ${{ steps.build-push-action-container-registry.outputs.digest }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trivy - create SBOM - ghcr.io/${{ github.repository_owner }}/${{ steps.variables.outputs.CONTAINER_IMAGE_NAME }}:${{ steps.docker_meta.outputs.version }}
         uses: aquasecurity/trivy-action@master
-        if: ${{ startsWith(github.ref, 'refs/tags/') && inputs.push_to_ghcr }}
+        if: ${{ (startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push) && inputs.push_to_ghcr }}
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/${{ steps.variables.outputs.CONTAINER_IMAGE_NAME }}:${{ steps.docker_meta.outputs.version }}
           scan-type: image
@@ -373,21 +374,21 @@ jobs:
           output: ${{ steps.variables.outputs.CONTAINER_REGISTRY }}-${{ steps.variables.outputs.CONTAINER_IMAGE_NAME }}-${{ steps.docker_meta.outputs.version }}-bom.cdx.json
 
       - name: Attach SBOM - ghcr.io/${{ github.repository_owner }}/${{ steps.variables.outputs.CONTAINER_IMAGE_NAME }}:${{ steps.docker_meta.outputs.version }}
-        if: ${{ startsWith(github.ref, 'refs/tags/') && inputs.push_to_ghcr }}
+        if: ${{ (startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push) && inputs.push_to_ghcr }}
         run: |
           set -euxo pipefail
           cosign attest --yes --predicate "${{ steps.variables.outputs.CONTAINER_REGISTRY }}-${{ steps.variables.outputs.CONTAINER_IMAGE_NAME }}-${{ steps.docker_meta.outputs.version }}-bom.cdx.json" --type cyclonedx "ghcr.io/${{ github.repository_owner }}/${{ steps.variables.outputs.CONTAINER_IMAGE_NAME }}@${CONTAINER_IMAGE_DIGEST_TAG}"
           cosign verify-attestation --type cyclonedx "ghcr.io/${{ github.repository_owner }}/${{ steps.variables.outputs.CONTAINER_IMAGE_NAME }}@${CONTAINER_IMAGE_DIGEST_TAG}" | jq '.payload |= @base64d | .payload | fromjson'
         env:
-          CONTAINER_IMAGE_DIGEST_TAG: ${{ steps.build-push-action-load.outputs.digest }}
+          CONTAINER_IMAGE_DIGEST_TAG: ${{ steps.build-push-action-container-registry.outputs.digest }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   #########################
   # SLSA
   #########################
 
-  ghcr-io-provenance:
-    if: ${{ startsWith(github.ref, 'refs/tags/') && inputs.push_to_ghcr }}
+  provenance-ghcr-io:
+    if: ${{ (startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push) && inputs.push_to_ghcr }}
     needs:
       - container-build
     permissions:
@@ -404,7 +405,7 @@ jobs:
       registry-password: "${{ secrets.GITHUB_TOKEN }}"
       registry-username: "${{ github.actor }}"
 
-  container-registry-provenance:
+  provenance-container-registry:
     if: ${{ startsWith(github.ref, 'refs/tags/') }}
     needs:
       - container-build

@@ -38,35 +38,56 @@ jobs:
       matrix:
         include:
           # Contains several vulnerabilities
-          - container_image_dockerfile_location: src/app/Dockerfile
+          - container_image: quay.io/petr_ruzicka/myc-hello-kubernetes
+            container_image_repository_url: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
+            container_image_dockerfile_location: src/app/Dockerfile
             # This is the "default Dockerfile", which will create tags without any suffix (like 'latest')
             container_image_tag_suffix: ""
+            container_image_platforms: linux/amd64,linux/arm64,linux/arm/v7
+            container_image_logo_url: https://raw.githubusercontent.com/cncf/artwork/40e2e8948509b40e4bad479446aaec18d6273bf2/projects/kubernetes/icon/color/kubernetes-icon-color.svg
 
-          - container_image_dockerfile_location: src/app/Dockerfile-node-18-alpine
+          - container_image: quay.io/petr_ruzicka/myc-hello-kubernetes
+            container_image_repository_url: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
+            container_image_dockerfile_location: src/app/Dockerfile-node-18-alpine
             container_image_tag_suffix: "-alpine"
+            container_image_platforms: linux/amd64,linux/arm64,linux/arm/v7
+            container_image_logo_url: https://raw.githubusercontent.com/cncf/artwork/40e2e8948509b40e4bad479446aaec18d6273bf2/projects/kubernetes/icon/color/kubernetes-icon-color.svg
 
           # "only" Grype finds some critical vulnerabilities
-          - container_image_dockerfile_location: src/app/Dockerfile-node-18-debian-slim
+          - container_image: quay.io/petr_ruzicka/myc-hello-kubernetes
+            container_image_repository_url: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
+            container_image_dockerfile_location: src/app/Dockerfile-node-18-debian-slim
             container_image_tag_suffix: "-debian-slim"
+            container_image_platforms: linux/amd64,linux/arm64,linux/arm/v7
+            container_image_logo_url: https://raw.githubusercontent.com/cncf/artwork/40e2e8948509b40e4bad479446aaec18d6273bf2/projects/kubernetes/icon/color/kubernetes-icon-color.svg
 
-          - container_image_dockerfile_location: src/app/Dockerfile-nodejs-16-ubi
+          - container_image: quay.io/petr_ruzicka/myc-hello-kubernetes
+            container_image_repository_url: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
+            container_image_dockerfile_location: src/app/Dockerfile-nodejs-16-ubi
             container_image_tag_suffix: "-ubi"
+            container_image_platforms: linux/amd64,linux/arm64
+            container_image_logo_url: https://raw.githubusercontent.com/cncf/artwork/40e2e8948509b40e4bad479446aaec18d6273bf2/projects/kubernetes/icon/color/kubernetes-icon-color.svg
 
-          - container_image_dockerfile_location: src/app/Dockerfile-nodejs18-distroless
+          - container_image: quay.io/petr_ruzicka/myc-hello-kubernetes
+            container_image_repository_url: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
+            container_image_dockerfile_location: src/app/Dockerfile-nodejs18-distroless
             container_image_tag_suffix: "-distroless"
+            container_image_platforms: linux/amd64
+            container_image_logo_url: https://raw.githubusercontent.com/cncf/artwork/40e2e8948509b40e4bad479446aaec18d6273bf2/projects/kubernetes/icon/color/kubernetes-icon-color.svg
 
     uses: ./.github/workflows/container-build-reusable-workflow.yml
     with:
       container_image_dockerfile_location: ${{ matrix.container_image_dockerfile_location }}
       container_image_tag_suffix: ${{ matrix.container_image_tag_suffix }}
       # The following variables can not be easily taken to `env` variables, because it is not supported :-(
-      container_image_destination: quay.io/petr_ruzicka/myc-hello-kubernetes
+      container_image_destination: ${{ matrix.container_image }}
+      container_image_platforms: ${{ matrix.container_image_platforms }}
       container_image_product_id: 12345
       container_image_vendor: MyCompany
       container_image_authors: petr.ruzicka@gmail.com
       container_image_authors_name: Petr Ruzicka
-      container_image_logo_url: https://raw.githubusercontent.com/cncf/artwork/40e2e8948509b40e4bad479446aaec18d6273bf2/projects/kubernetes/icon/color/kubernetes-icon-color.svg
-      container_image_repository_url: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
+      container_image_logo_url: ${{ matrix.container_image_logo_url }}
+      container_image_repository_url: ${{ matrix.container_image_repository_url }}
       container_image_expires_after: ${{ inputs.container_image_expires_after || 'Never' }} # days
       # https://github.com/actions/runner/issues/1483 (there are no "inputs" when not running using 'workflow_dispatch')
       container_image_skip_vulnerability_checks: ${{ inputs.container_image_skip_vulnerability_checks == true && true || false }}
