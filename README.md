@@ -10,10 +10,11 @@ Repository with images: <https://quay.io/repository/petr_ruzicka/myc-hello-kuber
 
 ### Generic
 
-- Multiple Dockerfile files in one repository
-- [not done] Multi-arch container images for each Dockerfile
+- Multiple Dockerfile files / sources in one git repository
+- Multi-arch container images for each Dockerfile
 - Image should be signed ([cosign](https://github.com/sigstore/cosign))
-- SBOM should be generated
+- [SBOM](https://www.cisa.gov/sbom) (Software Bill Of Materials)
+- [SLSA Provenance](https://slsa.dev/provenance/v0.1)
 - Build process should never overwrite existing tags (1.2.3) in container
   repository (doesn't apply for "latest" or "br-")
 - Container image should be scanned for "Critical" vulnerabilities before it
@@ -187,7 +188,7 @@ trivy image --severity HIGH,CRITICAL --platform=linux/arm64 node:18.10.0-buster-
 - Tag "main" branch
 
   ```bash
-  TAG="8.0.50"
+  TAG="8.0.55"
 
   git tag "v${TAG}-beta.0" && git push origin "v${TAG}-beta.0"
   sleep 10
