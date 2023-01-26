@@ -201,8 +201,8 @@ jobs:
       #########################
 
       - name: Prisma Cloud - scan container image
-        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' }}
         uses: PaloAltoNetworks/prisma-cloud-scan@v1
+        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         with:
           pcc_console_url: ${{ env.PCC_CONSOLE_URL }}
@@ -271,8 +271,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker meta
-        id: docker_meta
         uses: docker/metadata-action@v4
+        if: ${{ ( startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' ) && inputs.push_to_ghcr }}
+        id: docker_meta
         with:
           images: |
             name=${{ inputs.container_image_destination }}
@@ -318,6 +319,7 @@ jobs:
 
       - name: Docker build and push
         uses: docker/build-push-action@v3.3.0
+        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.container_registry_push || github.event_name == 'schedule' }}
         id: build-push-action-container-registry
         with:
           file: ${{ inputs.container_image_dockerfile_location }}
