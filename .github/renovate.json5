@@ -39,6 +39,12 @@
       "automergeType": "branch",
       "automerge": true,
     },
+    {
+      "matchDatasources": ["docker"],
+      "matchPaths": ["**/Dockerfile*ubi*"],
+      "matchPackagePatterns": ["registry.access.redhat.com/ubi9/nodejs-.*-minimal"],
+      "versioning": "regex:^(?<major>\\d+)-(?<minor>\\d+)\\.*(?<patch>\\d*)$"
+    },
   ],
   "prBodyTemplate": "{{{table}}}{{{notes}}}{{{changelogs}}}",
   "concurrentRequestLimit": 20,

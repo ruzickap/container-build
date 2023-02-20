@@ -90,7 +90,7 @@ Test commands:
 
 ```bash
 IMAGE="bridgecrew/checkov"
-IMAGE="quay.io/petr_ruzicka/malware-cryptominer-container:1.4.4"
+IMAGE="quay.io/petr_ruzicka/malware-cryptominer-container:2.0.0"
 IMAGE="ghcr.io/external-secrets/external-secrets:v0.7.1"
 export COSIGN_EXPERIMENTAL=1
 
@@ -100,21 +100,27 @@ cosign verify "${IMAGE}" | jq -r '.[].optional| .Issuer + " | " + .Subject + " |
 cosign triangulate "${IMAGE}"
 cosign tree "${IMAGE}"
 cosign verify-attestation --type slsaprovenance "${IMAGE}"
+cosign verify-attestation --type slsaprovenance "${IMAGE}" | jq '.payload |= @base64d | .payload | fromjson'
 cosign verify-attestation --type cyclonedx "${IMAGE}"
 cosign verify-attestation --type cyclonedx "${IMAGE}" | jq '.payload |= @base64d | .payload | fromjson'
 trivy image --debug --sbom-sources rekor "${IMAGE}"
 cosign verify-attestation --type cyclonedx "${IMAGE}" | jq -r '.payload' | base64 -d | jq -r '.predicate.Data' > /tmp/sbom.cdx.json
 trivy sbom /tmp/sbom.cdx.json
+trivy image --scanners license "${IMAGE}"
+trivy image --compliance docker-cis "${IMAGE}"
+trivy image --scanners none --image-config-scanners config "${IMAGE}"
+trivy image --scanners none --image-config-scanners secret "${IMAGE}"
 ```
 
 Test commands with other images:
 
 ```bash
 IMAGE="registry.k8s.io/kube-apiserver-amd64:v1.24.0"
-IMAGE="quay.io/petr_ruzicka/malware-cryptominer-container:latest"
+IMAGE="quay.io/petr_ruzicka/malware-cryptominer-container:2.0.0"
 IMAGE="quay.io/cilium/cilium:v1.13.0-rc3"
 IMAGE="quay.io/metallb/controller:latest"
 IMAGE="quay.io/costoolkit/elemental-operator:v1.1.0"
+IMAGE="ghcr.io/fluxcd/source-controller:v0.34.0"
 IMAGE="bridgecrew/checkov"
 export COSIGN_EXPERIMENTAL=1
 
@@ -158,6 +164,10 @@ docker buildx imagetools inspect moby/buildkit:latest --format '{{ json .Provena
 docker buildx imagetools inspect moby/buildkit:latest --format '{{ json (index .Provenance "linux/amd64").SLSA.invocation.configSource }}'
 docker buildx imagetools inspect moby/buildkit:latest --format '{{ (index .Provenance "linux/amd64").SLSA.builder.id }}'
 docker buildx imagetools inspect moby/buildkit:latest --format '{{ range (index .SBOM "linux/amd64").SPDX.packages }}{{ println .name }}{{ end }}'
+
+docker buildx imagetools inspect ghcr.io/fluxcd/source-controller:v0.34.0 --format "{{ json (index .Provenance \"linux/amd64\").SLSA}}"
+docker buildx imagetools inspect ghcr.io/fluxcd/source-controller:v0.34.0 --format "{{ json (index .SBOM \"linux/amd64\").SPDX}}"
+docker sbom fluxcd/source-controller:v0.34.0
 
 https://registry-ui.chainguard.app/?image=quay.io/petr_ruzicka/malware-cryptominer-container:1
 https://registry-ui.chainguard.app/?image=cgr.dev/chainguard/nginx:latest
