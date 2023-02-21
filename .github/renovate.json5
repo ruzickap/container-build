@@ -3,7 +3,7 @@
   "branchPrefix": "renovate/",
   "ignorePaths": [
     // Keep original Dockerfile untouched
-    "src/app/Dockerfile",
+    "src/app/Dockerfile$",
     // Keep original application + dependencies untouched
     "src/app/package.json",
     // Disable updates due to Node LTS versions issue: https://github.com/renovatebot/renovate/issues/5990
@@ -13,6 +13,7 @@
   "labels": ["renovate", "renovate/{{replace '.*/' '' depName}}", "renovate/{{updateType}}"],
   "packageRules": [
     {
+      "description": "Update all 'patch' versions without waiting for tests",
       "matchUpdateTypes": ["patch"],
       "automergeType": "branch",
       // Do not wait for tests - this will speed up the whole process - updating many branches + running many tests
@@ -26,16 +27,22 @@
       "enabled": false
     },
     {
+      "description": "Update renovate once per week only if there is a new version",
       "matchPackageNames": ["renovatebot/github-action"],
-      "matchUpdateTypes": ["minor"],
+      "matchUpdateTypes": ["major", "minor"],
       "automergeType": "branch",
       "automerge": true,
-      "ignoreTests": true,
       "schedule": ["* 0,2,4 1-7 * 0"],
     },
     {
       "description": "Update all github-actions by default",
       "matchManagers": ["github-actions"],
+      "automergeType": "branch",
+      "automerge": true,
+    },
+    {
+      "description": "Update megalinter automatically",
+      "matchPackageNames": ["megalinter/github-action"],
       "automergeType": "branch",
       "automerge": true,
     },
@@ -47,11 +54,11 @@
     },
   ],
   "prBodyTemplate": "{{{table}}}{{{notes}}}{{{changelogs}}}",
-  "concurrentRequestLimit": 20,
   "rebaseWhen": "behind-base-branch",
   "regexManagers": [
     {
       "fileMatch": [
+        "Dockerfile*",
         "^\\.github/workflows/.*\\.ya?ml$",
         "README\\.md$",
       ],
