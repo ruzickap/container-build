@@ -92,7 +92,6 @@ Test commands:
 IMAGE="bridgecrew/checkov"
 IMAGE="quay.io/petr_ruzicka/malware-cryptominer-container:2.0.0"
 IMAGE="ghcr.io/external-secrets/external-secrets:v0.7.1"
-export COSIGN_EXPERIMENTAL=1
 
 docker buildx imagetools inspect "${IMAGE}"
 cosign verify "${IMAGE}" | jq
@@ -117,12 +116,11 @@ Test commands with other images:
 ```bash
 IMAGE="registry.k8s.io/kube-apiserver-amd64:v1.24.0"
 IMAGE="quay.io/petr_ruzicka/malware-cryptominer-container:2.0.0"
-IMAGE="quay.io/cilium/cilium:v1.13.0-rc3"
+IMAGE="quay.io/cilium/cilium:v1.13.0"
 IMAGE="quay.io/metallb/controller:latest"
 IMAGE="quay.io/costoolkit/elemental-operator:v1.1.0"
 IMAGE="ghcr.io/fluxcd/source-controller:v0.34.0"
 IMAGE="bridgecrew/checkov"
-export COSIGN_EXPERIMENTAL=1
 
 skopeo inspect --raw "docker://${IMAGE}"
 cosign verify "${IMAGE}" | jq
@@ -139,7 +137,7 @@ rekor-cli search --email petr.ruzicka@gmail.com
 rekor-cli get --log-index 8757761
 
 docker manifest inspect "${IMAGE}"
-cosign download sbom ghcr.io/google/ko --platform=linux/amd64
+cosign download sbom --platform=linux/amd64 ghcr.io/google/ko
 cosign download sbom --platform=linux/amd64 cgr.dev/chainguard/node
 cosign download sbom "${IMAGE}"
 
@@ -171,6 +169,9 @@ docker sbom fluxcd/source-controller:v0.34.0
 
 https://registry-ui.chainguard.app/?image=quay.io/petr_ruzicka/malware-cryptominer-container:1
 https://registry-ui.chainguard.app/?image=cgr.dev/chainguard/nginx:latest
+
+cosign verify --certificate-github-workflow-repository cilium/cilium --certificate-oidc-issuer https://token.actions.githubusercontent.com --certificate-github-workflow-name "Image Release Build" --certificate-github-workflow-ref refs/tags/v1.13.0 quay.io/cilium/cilium:v1.13.0 | jq
+cosign verify --certificate-github-workflow-repository cilium/cilium --certificate-oidc-issuer https://token.actions.githubusercontent.com --attachment sbom quay.io/cilium/cilium:v1.13.0 | jq
 ```
 
 ## Container scanners
