@@ -103,7 +103,6 @@ env:
   WIZ_CLIENT_SECRET: ${{ secrets.wiz_client_secret }}
   COSIGN_PRIVATE_KEY: ${{ secrets.cosign_private_key }}
   COSIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.cosign_private_key_password }}
-  COSIGN_EXPERIMENTAL: true
 
 jobs:
   temporary-container-build:
