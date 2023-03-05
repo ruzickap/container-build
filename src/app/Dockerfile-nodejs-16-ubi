@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/nodejs-16-minimal:1-91.1675790155
+FROM registry.access.redhat.com/ubi9/nodejs-16-minimal:1-101
 
 ENV PORT 8080
 
