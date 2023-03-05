@@ -27,7 +27,6 @@ jobs:
           JAVASCRIPT_STANDARD_FILTER_REGEX_EXCLUDE: src/app/server.js
           PRINT_ALPACA: false
           SARIF_REPORTER: true
-          SPELL_CSPELL_FILTER_REGEX_EXCLUDE: (.github/|src/app/|.checkov.yml)
           VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
 
       - name: Upload MegaLinter scan results to GitHub Security tab
