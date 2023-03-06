@@ -336,7 +336,7 @@ jobs:
       - name: Sign the images with GitHub OIDC Token
         run: |
           set -euxo pipefail
-          echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign {}@${{ steps.build-push-action-container-registry.outputs.digest }}
+          echo "${{ steps.docker_meta.outputs.tags }}" | xargs --verbose -I {} cosign sign --yes {}@${{ steps.build-push-action-container-registry.outputs.digest }}
 
       #########################
       # SBOM
