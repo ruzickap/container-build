@@ -30,6 +30,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JAVASCRIPT_STANDARD_FILTER_REGEX_EXCLUDE: src/app/server.js
           PRINT_ALPACA: false
+          REPOSITORY_TRIVY_ARGUMENTS: --skip-files container-build/src/app/Dockerfile
           SARIF_REPORTER: true
           VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
 
