@@ -16,6 +16,8 @@ ENV PORT 8080
 COPY --from=build-env /app /app
 WORKDIR /app
 
+USER nobody
+
 EXPOSE ${PORT}
 
 HEALTHCHECK --interval=4s --timeout=3s --retries=5 \
