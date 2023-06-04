@@ -14,6 +14,9 @@ RUN npm install
 # Copy local code to the container image
 COPY . ./
 
+HEALTHCHECK --interval=4s --timeout=3s --retries=5 \
+  CMD curl -f http://localhost:${PORT} || exit 1
+
 USER 1001
 
 # Run the web service on container startup
