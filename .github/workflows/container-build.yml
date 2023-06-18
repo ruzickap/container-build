@@ -103,9 +103,9 @@ jobs:
       container_registry_user: ${{ secrets.CONTAINER_REGISTRY_USER }}
       container_registry_password: ${{ secrets.CONTAINER_REGISTRY_PASSWORD }}
       # Prisma Cloud credentials (optional)
-      pcc_console_url: ${{ secrets.PCC_CONSOLE_URL }}
-      pcc_pass: ${{ secrets.PCC_PASS }}
-      pcc_user: ${{ secrets.PCC_USER }}
+      # pcc_console_url: ${{ secrets.PCC_CONSOLE_URL }}
+      # pcc_pass: ${{ secrets.PCC_PASS }}
+      # pcc_user: ${{ secrets.PCC_USER }}
       # Snyk credentials (optional)
       snyk_token: ${{ secrets.SNYK_TOKEN }}
       # Wiz credentials (optional)
