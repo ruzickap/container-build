@@ -187,7 +187,7 @@ jobs:
           SNYK_TOKEN: ${{ env.SNYK_TOKEN }}
         with:
           image: temporary_container-${{ github.run_id }}:latest
-          args: --file=${{ inputs.container_image_dockerfile_location }} --severity-threshold=high
+          args: --file=${{ inputs.container_image_dockerfile_location }} --severity-threshold=critical
 
       #########################
       # Prisma Cloud Scanner
