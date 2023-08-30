@@ -32,11 +32,4 @@ jobs:
           PRINT_ALPACA: false
           REPOSITORY_KICS_ARGUMENTS: --exclude-paths .github/workflows/renovate.yml,src/app/Dockerfile --exclude-queries=e36d8880-3f78-4546-b9a1-12f0745ca0d5
           REPOSITORY_TRIVY_ARGUMENTS: --skip-files src/app/Dockerfile
-          SARIF_REPORTER: true
           VALIDATE_ALL_CODEBASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
-
-      - name: Upload MegaLinter scan results to GitHub Security tab
-        if: ${{ always() }}
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: "megalinter-reports/megalinter-report.sarif"
