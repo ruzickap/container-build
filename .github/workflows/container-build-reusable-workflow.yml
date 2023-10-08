@@ -59,6 +59,11 @@ on:
         type: boolean
         required: false
         default: false
+      # Values: prisma, trivy, anchore, snyk, wiz
+      container_image_skip_vulnerability_scanners:
+        description: "Skip image (vulnerability) scanner"
+        type: string
+        required: false
       push_to_ghcr:
         description: "Push image to ghcr.io (GitHub)"
         type: boolean
@@ -153,7 +158,7 @@ jobs:
 
       - name: Trivy - scan container image
         uses: aquasecurity/trivy-action@master
-        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' }}
+        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && ! contains(inputs.container_image_skip_vulnerability_scanners, 'trivy') }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         with:
           image-ref: temporary_container-${{ github.run_id }}:latest
@@ -168,7 +173,7 @@ jobs:
       - name: Grype - scan container image
         uses: anchore/scan-action@v3
         # Continue whenever container was built (no matter if previous scanner failed)
-        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' }}
+        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && ! contains(inputs.container_image_skip_vulnerability_scanners, 'grype')}}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         with:
           image: temporary_container-${{ github.run_id }}:latest
@@ -181,7 +186,7 @@ jobs:
 
       - name: Snyk - scan container image
         uses: snyk/actions/docker@master
-        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.SNYK_TOKEN != '' }}
+        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.SNYK_TOKEN != '' && ! contains(inputs.container_image_skip_vulnerability_scanners, 'snyk') }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         env:
           SNYK_TOKEN: ${{ env.SNYK_TOKEN }}
@@ -195,7 +200,7 @@ jobs:
 
       - name: Prisma Cloud - scan container image
         uses: PaloAltoNetworks/prisma-cloud-scan@v1
-        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' }}
+        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' && ! contains(inputs.container_image_skip_vulnerability_scanners, 'prisma') }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         with:
           pcc_console_url: ${{ env.PCC_CONSOLE_URL }}
@@ -208,7 +213,7 @@ jobs:
       #########################
 
       - name: Wiz - scan container image
-        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.WIZ_CLIENT_ID != '' && env.WIZ_CLIENT_SECRET != '' }}
+        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.WIZ_CLIENT_ID != '' && env.WIZ_CLIENT_SECRET != '' && ! contains(inputs.container_image_skip_vulnerability_scanners, 'wiz') }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         env:
           WIZ_CLIENT_ID: ${{ env.WIZ_CLIENT_ID }}

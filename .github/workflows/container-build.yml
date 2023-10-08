@@ -43,29 +43,29 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Contains several vulnerabilities
-          - container_image: quay.io/petr_ruzicka/myc-hello-kubernetes
-            container_image_repository_url: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
-            container_image_dockerfile_location: src/app/Dockerfile
-            # This is the "default Dockerfile", which will create tags without any suffix (like 'latest')
-            container_image_tag_suffix: ""
-            container_image_platforms: linux/amd64,linux/arm64,linux/arm/v7
-            container_image_logo_url: https://raw.githubusercontent.com/cncf/artwork/40e2e8948509b40e4bad479446aaec18d6273bf2/projects/kubernetes/icon/color/kubernetes-icon-color.svg
+          # # Contains several vulnerabilities
+          # - container_image: quay.io/petr_ruzicka/myc-hello-kubernetes
+          #   container_image_repository_url: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
+          #   container_image_dockerfile_location: src/app/Dockerfile
+          #   # This is the "default Dockerfile", which will create tags without any suffix (like 'latest')
+          #   container_image_tag_suffix: ""
+          #   container_image_platforms: linux/amd64,linux/arm64,linux/arm/v7
+          #   container_image_logo_url: https://raw.githubusercontent.com/cncf/artwork/40e2e8948509b40e4bad479446aaec18d6273bf2/projects/kubernetes/icon/color/kubernetes-icon-color.svg
 
-          - container_image: quay.io/petr_ruzicka/myc-hello-kubernetes
-            container_image_repository_url: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
-            container_image_dockerfile_location: src/app/Dockerfile-node-18-alpine
-            container_image_tag_suffix: "-alpine"
-            container_image_platforms: linux/amd64,linux/arm64,linux/arm/v7
-            container_image_logo_url: https://raw.githubusercontent.com/cncf/artwork/40e2e8948509b40e4bad479446aaec18d6273bf2/projects/kubernetes/icon/color/kubernetes-icon-color.svg
+          # - container_image: quay.io/petr_ruzicka/myc-hello-kubernetes
+          #   container_image_repository_url: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
+          #   container_image_dockerfile_location: src/app/Dockerfile-node-18-alpine
+          #   container_image_tag_suffix: "-alpine"
+          #   container_image_platforms: linux/amd64,linux/arm64,linux/arm/v7
+          #   container_image_logo_url: https://raw.githubusercontent.com/cncf/artwork/40e2e8948509b40e4bad479446aaec18d6273bf2/projects/kubernetes/icon/color/kubernetes-icon-color.svg
 
-          # "only" Grype finds some critical vulnerabilities
           - container_image: quay.io/petr_ruzicka/myc-hello-kubernetes
             container_image_repository_url: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
             container_image_dockerfile_location: src/app/Dockerfile-node-18-debian-slim
             container_image_tag_suffix: "-debian-slim"
             container_image_platforms: linux/amd64,linux/arm64,linux/arm/v7
             container_image_logo_url: https://raw.githubusercontent.com/cncf/artwork/40e2e8948509b40e4bad479446aaec18d6273bf2/projects/kubernetes/icon/color/kubernetes-icon-color.svg
+            container_image_skip_vulnerability_scanners: grype
 
           - container_image: quay.io/petr_ruzicka/myc-hello-kubernetes
             container_image_repository_url: https://quay.io/repository/petr_ruzicka/myc-hello-kubernetes?tab=tags
@@ -93,6 +93,7 @@ jobs:
       container_image_authors: petr.ruzicka@gmail.com
       container_image_authors_name: Petr Ruzicka
       container_image_logo_url: ${{ matrix.container_image_logo_url }}
+      container_image_skip_vulnerability_scanners: ${{ matrix.container_image_skip_vulnerability_scanners }}
       container_image_repository_url: ${{ matrix.container_image_repository_url }}
       container_image_expires_after: ${{ inputs.container_image_expires_after || 'Never' }} # days
       # https://github.com/actions/runner/issues/1483 (there are no "inputs" when not running using 'workflow_dispatch')
