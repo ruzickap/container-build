@@ -1,80 +1,62 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "branchPrefix": "renovate/",
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  automerge: true,
+  automergeType: "branch",
   "ignorePaths": [
     // Keep original Dockerfile untouched
     "src/app/Dockerfile$",
     // Keep original application + dependencies untouched
     "src/app/package.json",
   ],
-  "labels": ["renovate", "renovate/{{replace '.*/' '' depName}}", "renovate/{{updateType}}"],
-  "packageRules": [
+  ignoreTests: true,
+  labels: [
+    "renovate",
+    "renovate/{{replace '.*/' '' depName}}",
+    "renovate/{{updateType}}",
+  ],
+  packageRules: [
     {
-      "description": "Update all 'patch' versions without waiting for tests",
-      "matchUpdateTypes": ["patch"],
-      "automergeType": "branch",
-      // Do not wait for tests - this will speed up the whole process - updating many branches + running many tests
-      "ignoreTests": true,
-      "automerge": true,
+      matchUpdateTypes: ["patch"],
     },
     {
-      "description": "Ignore frequent renovate updates",
-      "matchPackageNames": ["renovatebot/github-action"],
-      "matchUpdateTypes": ["patch"],
-      "enabled": false
+      description: "Ignore frequent renovate updates",
+      matchPackageNames: ["renovatebot/github-action"],
+      matchUpdateTypes: ["patch"],
+      enabled: false,
     },
     {
-      "description": "Update renovate once per week only if there is a new version",
-      "matchPackageNames": ["renovatebot/github-action"],
-      "matchUpdateTypes": ["major", "minor"],
-      "automergeType": "branch",
-      "automerge": true,
-      "schedule": ["* 0,2,4 1-7 * 0"],
+      matchPackageNames: ["renovatebot/github-action"],
+      matchUpdateTypes: ["minor"],
+      schedule: ["* 0,2,4 1-7 * 0"],
+      ignoreTests: false,
     },
     {
-      "description": "Update all github-actions by default",
-      "matchManagers": ["github-actions"],
-      "automergeType": "branch",
-      "automerge": true,
-    },
-    {
-      "description": "Update megalinter automatically",
-      "matchPackageNames": ["megalinter/github-action"],
-      "automergeType": "branch",
-      "automerge": true,
+      description: "Update all github-actions by default",
+      matchManagers: ["github-actions"],
+      ignoreTests: false,
     },
     {
       "matchDatasources": ["docker"],
       "matchPaths": ["**/Dockerfile*ubi*"],
       "matchPackagePatterns": ["registry.access.redhat.com/ubi9/nodejs-.*"],
       "versioning": "regex:^(?<major>\\d+)-(?<minor>\\d+)\\.*(?<patch>\\d*)$",
-      "automergeType": "branch",
-      "automerge": true,
-    },
-    {
-      // Disable updates due to Node LTS versions issue:
-      //   https://github.com/renovatebot/renovate/issues/13270
-      "matchManagers": ["dockerfile"],
-      "matchPackagePatterns": ["node"],
-      "matchUpdateTypes": ["major"],
-      "enabled": false,
     },
   ],
-  "prBodyTemplate": "{{{table}}}{{{notes}}}{{{changelogs}}}",
-  "rebaseWhen": "behind-base-branch",
-  "regexManagers": [
+  prBodyTemplate: "{{{table}}}{{{notes}}}{{{changelogs}}}",
+  rebaseWhen: "behind-base-branch",
+  regexManagers: [
     {
-      "fileMatch": [
-        "Dockerfile*",
-        "^\\.github/workflows/.*\\.ya?ml$",
-        "README\\.md$",
+      fileMatch: ["\\.ya?ml$", "\\.md$"],
+      matchStrings: [
+        '# renovate: datasource=(?<datasource>.+?) depName=(?<depName>.+?)( versioning=(?<versioning>.+?))?( extractVersion=(?<extractVersion>.+?))?( registryUrl=(?<registryUrl>.+?))?\\s.*[=:]\\s*"?(?<currentValue>.+?)"?\\s',
       ],
-      "matchStrings": [
-        "# renovate: datasource=(?<datasource>.+?) depName=(?<depName>.+?)( versioning=(?<versioning>.+?))?( extractVersion=(?<extractVersion>.+?))?( registryUrl=(?<registryUrl>.+?))?\\s.*[=:]\\s*\"?(?<currentValue>.+?)\"?\\s",
-      ],
-      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
-      "extractVersionTemplate": "{{#if extractVersion}}{{{extractVersion}}}{{else}}^v?(?<version>.+)${{/if}}",
+      versioningTemplate: "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
+      extractVersionTemplate: "{{#if extractVersion}}{{{extractVersion}}}{{else}}^v?(?<version>.+)${{/if}}",
     },
   ],
-  "separateMinorPatch": true,
+  separateMinorPatch: true,
+  vulnerabilityAlerts: {
+    commitMessagePrefix: "chore(renovate): Security update",
+    labels: ["security"],
+  },
 }
