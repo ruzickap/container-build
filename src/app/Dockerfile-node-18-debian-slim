@@ -1,4 +1,4 @@
-FROM node:21.5.0-bullseye-slim
+FROM node:21.6.0-bullseye-slim
 
 ENV PORT 8080
 
