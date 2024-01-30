@@ -1,14 +1,19 @@
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
-  automerge: true,
-  automergeType: "branch",
-  "ignorePaths": [
+  extends: [
+    "config:recommended",
+    ":disableDependencyDashboard",
+    ":disableRateLimiting",
+    ":enableVulnerabilityAlertsWithLabel(security)",
+    "helpers:pinGitHubActionDigestsToSemver",
+    "security:openssf-scorecard",
+  ],
+  ignorePaths: [
     // Keep original Dockerfile untouched
     "src/app/Dockerfile$",
     // Keep original application + dependencies untouched
     "src/app/package.json",
   ],
-  ignoreTests: true,
   labels: [
     "renovate",
     "renovate/{{replace '.*/' '' depName}}",
@@ -16,7 +21,8 @@
   ],
   packageRules: [
     {
-      matchUpdateTypes: ["patch"],
+      matchUpdateTypes: ["major"],
+      automerge: false,
     },
     {
       description: "Ignore frequent renovate updates",
@@ -25,15 +31,10 @@
       matchUpdateTypes: ["patch"],
     },
     {
-      ignoreTests: false,
+      description: "Update renovatebot/github-action minor updates on Sundays",
       matchPackageNames: ["renovatebot/github-action"],
       matchUpdateTypes: ["minor"],
-      schedule: ["* 0,2,4 1-7 * 0"],
-    },
-    {
-      description: "Update all github-actions by default",
-      ignoreTests: false,
-      matchManagers: ["github-actions"],
+      schedule: ["* * * * 0"],
     },
     {
       matchDatasources: ["docker"],
@@ -47,7 +48,7 @@
   regexManagers: [
     {
       extractVersionTemplate: "{{#if extractVersion}}{{{extractVersion}}}{{else}}^v?(?<version>.+)${{/if}}",
-      fileMatch: ["\\.ya?ml$", "\\.md$"],
+      fileMatch: ["\\.ya?ml$", "\\.md$", "^Dockerfile$", "^entrypoint\\.sh$"],
       matchStrings: [
         '# renovate: datasource=(?<datasource>.+?) depName=(?<depName>.+?)( versioning=(?<versioning>.+?))?( extractVersion=(?<extractVersion>.+?))?( registryUrl=(?<registryUrl>.+?))?\\s.*[=:]\\s*"?(?<currentValue>.+?)"?\\s',
       ],
@@ -55,8 +56,4 @@
     },
   ],
   separateMinorPatch: true,
-  vulnerabilityAlerts: {
-    commitMessagePrefix: "chore(renovate): Security update",
-    labels: ["security"],
-  },
 }
