@@ -397,8 +397,6 @@ jobs:
     with:
       image: ghcr.io/${{ github.repository_owner }}/${{ needs.container-build.outputs.container_image_name }}
       digest: ${{ needs.container-build.outputs.container_image_digest }}
-      # TODO(https://github.com/slsa-framework/slsa-github-generator/issues/492): Remove after GA release.
-      compile-generator: true
     secrets:
       registry-password: "${{ secrets.GITHUB_TOKEN }}"
       registry-username: "${{ github.actor }}"
@@ -411,8 +409,6 @@ jobs:
     with:
       image: ${{ inputs.container_image_destination }}
       digest: ${{ needs.container-build.outputs.container_image_digest }}
-      # TODO(https://github.com/slsa-framework/slsa-github-generator/issues/492): Remove after GA release.
-      compile-generator: true
     secrets:
       registry-password: "${{ secrets.container_registry_password }}"
       registry-username: "${{ secrets.container_registry_user }}"
