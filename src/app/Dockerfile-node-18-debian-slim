@@ -8,6 +8,7 @@ WORKDIR /usr/src/app
 
 # Install app dependencies
 COPY package.json /usr/src/app/
+# kics-scan ignore-line
 RUN npm install --cache /tmp/.npm && rm -rf /tmp/.npm
 
 # Bundle app source

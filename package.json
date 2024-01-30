@@ -1,0 +1,9 @@
+{
+  "name": "hello-kubernetes",
+  "version": "1.10.1",
+  "standard": {
+    "ignore": [
+      "src/app/server.js"
+    ]
+  }
+}

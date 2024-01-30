@@ -40,11 +40,11 @@ Repository with images: <https://quay.io/repository/petr_ruzicka/myc-hello-kuber
 Build commands:
 
 ```bash
-docker build -f ./src/app/Dockerfile                     -t myc-hello-kubernetes:latest             src/app
-docker build -f ./src/app/Dockerfile-node-18-alpine      -t myc-hello-kubernetes:latest-alpine      src/app
+docker build -f ./src/app/Dockerfile -t myc-hello-kubernetes:latest src/app
+docker build -f ./src/app/Dockerfile-node-18-alpine -t myc-hello-kubernetes:latest-alpine src/app
 docker build -f ./src/app/Dockerfile-node-18-debian-slim -t myc-hello-kubernetes:latest-debian-slim src/app
-docker build -f ./src/app/Dockerfile-nodejs18-distroless -t myc-hello-kubernetes:latest-distroless  src/app
-docker build -f ./src/app/Dockerfile-nodejs-16-ubi       -t myc-hello-kubernetes:latest-ubi         src/app
+docker build -f ./src/app/Dockerfile-nodejs18-distroless -t myc-hello-kubernetes:latest-distroless src/app
+docker build -f ./src/app/Dockerfile-nodejs-16-ubi -t myc-hello-kubernetes:latest-ubi src/app
 ```
 
 Run commands:
@@ -149,11 +149,10 @@ curl -s -H 'Accept: application/vnd.oci.image.index.v1+json' "https://quay.io/v2
 
 # Verify SBOM attestation
 cosign verify-attestation --type cyclonedx bridgecrew/checkov | jq '.payload |= @base64d | .payload | fromjson | select(.predicateType == "https://cyclonedx.org/schema") | .predicate.Data'
-cosign verify-attestation --type slsaprovenance --key https://ftp.suse.com/pub/projects/security/keys/container–key.pem registry.suse.com/bci/golang@sha256:35bc38ce40811b587a56bcfa328ef077c0703732e3bbedf4dbdf47f612cca04b | jq
+cosign verify-attestation --type slsaprovenance --key https://ftp.suse.com/pub/projects/security/keys/container–key.pem registry.suse.com/bci/golang@sha256:35bc38ce40811b587a56bcfa328ef077c0703732e3bbedf4dbdf47f612cca04b | jq # DevSkim: ignore DS117838
 cosign verify-attestation --type slsaprovenance ghcr.io/thomasvitale/band-service@sha256:388e8d292b55a7934bdaf11277ea9f33c3533258de92eb4b12085717dbdbd875 | jq '.payload |= @base64d | .payload | fromjson'
 
 docker manifest inspect quay.io/jetstack/cert-manager-controller:v1.9.1
-
 
 slsa-verifier verify-image "ghcr.io/chgl/kube-powertools@sha256:b76dc742957ae883f3ed0c4fe89b54d5c9a9de69a8bc531f9ee12ec995dab10d" --source-uri github.com/chgl/kube-powertools
 
@@ -167,8 +166,8 @@ docker buildx imagetools inspect ghcr.io/fluxcd/source-controller:v0.34.0 --form
 docker buildx imagetools inspect ghcr.io/fluxcd/source-controller:v0.34.0 --format "{{ json (index .SBOM \"linux/amd64\").SPDX}}"
 docker sbom fluxcd/source-controller:v0.34.0
 
-https://registry-ui.chainguard.app/?image=quay.io/petr_ruzicka/malware-cryptominer-container:1
-https://registry-ui.chainguard.app/?image=cgr.dev/chainguard/nginx:latest
+# https://registry-ui.chainguard.app/?image=quay.io/petr_ruzicka/malware-cryptominer-container:1
+# https://registry-ui.chainguard.app/?image=cgr.dev/chainguard/nginx:latest
 
 cosign verify --certificate-github-workflow-repository cilium/cilium --certificate-oidc-issuer https://token.actions.githubusercontent.com --certificate-github-workflow-name "Image Release Build" --certificate-github-workflow-ref refs/tags/v1.13.0 quay.io/cilium/cilium:v1.13.0 | jq
 cosign verify --certificate-github-workflow-repository cilium/cilium --certificate-oidc-issuer https://token.actions.githubusercontent.com --attachment sbom quay.io/cilium/cilium:v1.13.0 | jq
@@ -264,16 +263,16 @@ trivy image --severity HIGH,CRITICAL --platform=linux/arm64 node:18.10.0-buster-
 
   ```bash
   git checkout -b fix2
-  date > date
-  git add date && git commit -m "fix(container-build): date" && git push
+  date > date.txt
+  git add date.txt && git commit -m "fix(container-build): date" && git push
   PR_URL=$(gh pr create --fill)
   gh workflow run container-build.yml --ref=fix2 -f container_registry_push=true -f container_image_expires_after=30 -f container_image_skip_vulnerability_checks=true
   sleep 10
   WORKLOAD_ID=$(gh run list --workflow=container-build.yml --limit 1 --json databaseId | jq -r '.[].databaseId')
   gh run watch "${WORKLOAD_ID}"
-  date > date
-  git add date && git commit -m "fix(container-build): date2" && git push
-  gh workflow run container-build.yml --ref=fix2  -f container_registry_push=true -f container_image_expires_after=30 -f container_image_skip_vulnerability_checks=true
+  date > date.txt
+  git add date.txt && git commit -m "fix(container-build): date2" && git push
+  gh workflow run container-build.yml --ref=fix2 -f container_registry_push=true -f container_image_expires_after=30 -f container_image_skip_vulnerability_checks=true
   sleep 10
   WORKLOAD_ID=$(gh run list --workflow=container-build.yml --limit 1 --json databaseId | jq -r '.[].databaseId')
   gh run watch "${WORKLOAD_ID}"

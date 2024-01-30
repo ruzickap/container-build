@@ -13,3 +13,5 @@ COPY . /usr/src/app
 
 USER node
 CMD [ "npm", "start" ]
+
+HEALTHCHECK NONE

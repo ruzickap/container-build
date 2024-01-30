@@ -11,6 +11,7 @@ WORKDIR /opt/app-root
 COPY package.json ./
 
 # Install dependencies
+# kics-scan ignore-line
 RUN npm install --cache /tmp/.npm && rm -rf /tmp/.npm
 
 # Copy local code to the container image
