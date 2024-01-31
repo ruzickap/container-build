@@ -199,7 +199,7 @@ jobs:
       #########################
 
       - name: Prisma Cloud - scan container image
-        uses: PaloAltoNetworks/prisma-cloud-scan@c80fce73211b7db71b06e44447c23e0258b40a73 # v1.6.3
+        uses: PaloAltoNetworks/prisma-cloud-scan@0c9409e9bcf57caed9ea979918534169e694fa0e # v1.6.4
         if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.PCC_CONSOLE_URL != '' && env.PCC_PASS != '' && env.PCC_USER != '' && ! contains(inputs.container_image_skip_vulnerability_scanners, 'prisma') }}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
         with:
