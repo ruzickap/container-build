@@ -144,7 +144,7 @@ jobs:
           echo "CONTAINER_IMAGE_DOCKER_BUILD_DIRECTORY=$(dirname "${{ inputs.container_image_dockerfile_location }}")" | tee -a "${GITHUB_OUTPUT}"
 
       - name: Build temporary container image
-        uses: docker/build-push-action@1a162644f9a7e87d8f4b053101d1d9a712edc18c # v6.3.0
+        uses: docker/build-push-action@1ca370b3a9802c92e886402e0dd88098a2533b12 # v6.4.1
         id: build-push-action-temporary-container-registry
         with:
           file: ${{ inputs.container_image_dockerfile_location }}
@@ -325,7 +325,7 @@ jobs:
             quay.expires-after=${{ steps.variables.outputs.CONTAINER_IMAGE_EXPIRES_AFTER }}
 
       - name: Docker build and push
-        uses: docker/build-push-action@1a162644f9a7e87d8f4b053101d1d9a712edc18c # v6.3.0
+        uses: docker/build-push-action@1ca370b3a9802c92e886402e0dd88098a2533b12 # v6.4.1
         id: build-push-action-container-registry
         with:
           file: ${{ inputs.container_image_dockerfile_location }}
