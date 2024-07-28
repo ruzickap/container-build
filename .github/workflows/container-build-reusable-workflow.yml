@@ -261,7 +261,7 @@ jobs:
           fi
 
       - name: Login to container registry - ${{ steps.variables.outputs.CONTAINER_REGISTRY }}
-        uses: docker/login-action@0d4c9c5ea7693da7b068278f7b52bda2a190a446 # v3.2.0
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
           registry: ${{ steps.variables.outputs.CONTAINER_REGISTRY }}
           username: ${{ secrets.container_registry_user }}
@@ -269,7 +269,7 @@ jobs:
 
       - name: Login to container registry - ghcr.io
         if: ${{ inputs.push_to_ghcr }}
-        uses: docker/login-action@0d4c9c5ea7693da7b068278f7b52bda2a190a446 # v3.2.0
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
