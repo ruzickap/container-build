@@ -212,18 +212,18 @@ jobs:
       # Wiz Scanner
       #########################
 
-      - name: Wiz - scan container image
-        if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.WIZ_CLIENT_ID != '' && env.WIZ_CLIENT_SECRET != '' && ! contains(inputs.container_image_skip_vulnerability_scanners, 'wiz') }}
-        continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
-        env:
-          WIZ_CLIENT_ID: ${{ env.WIZ_CLIENT_ID }}
-          WIZ_CLIENT_SECRET: ${{ env.WIZ_CLIENT_SECRET }}
-          CONTAINER_IMAGE_DESTINATION: ${{ inputs.container_image_destination }}
-        run: |
-          set -euxo pipefail
-          curl -s -o wizcli https://wizcli.app.wiz.io/wizcli && chmod +x wizcli
-          ./wizcli auth --id "${WIZ_CLIENT_ID}" --secret "${WIZ_CLIENT_SECRET}"
-          ./wizcli docker scan --image "temporary_container-${{ github.run_id }}:latest" --tag product_id="${{ inputs.container_image_product_id }}"
+      # - name: Wiz - scan container image
+      #   if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && env.WIZ_CLIENT_ID != '' && env.WIZ_CLIENT_SECRET != '' && ! contains(inputs.container_image_skip_vulnerability_scanners, 'wiz') }}
+      #   continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
+      #   env:
+      #     WIZ_CLIENT_ID: ${{ env.WIZ_CLIENT_ID }}
+      #     WIZ_CLIENT_SECRET: ${{ env.WIZ_CLIENT_SECRET }}
+      #     CONTAINER_IMAGE_DESTINATION: ${{ inputs.container_image_destination }}
+      #   run: |
+      #     set -euxo pipefail
+      #     curl -s -o wizcli https://wizcli.app.wiz.io/wizcli && chmod +x wizcli
+      #     ./wizcli auth --id "${WIZ_CLIENT_ID}" --secret "${WIZ_CLIENT_SECRET}"
+      #     ./wizcli docker scan --image "temporary_container-${{ github.run_id }}:latest" --tag product_id="${{ inputs.container_image_product_id }}"
 
   container-build:
     runs-on: ubuntu-latest

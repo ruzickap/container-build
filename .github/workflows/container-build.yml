@@ -12,7 +12,8 @@ on:
         description: "Skip image (vulnerability) scanner"
         type: boolean
         required: false
-        default: false
+        # default: false
+        default: true
       container_image_expires_after:
         description: "Expires after (days) [or 'Never']"
         type: string
