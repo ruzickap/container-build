@@ -171,7 +171,7 @@ jobs:
       #########################
 
       - name: Grype - scan container image
-        uses: anchore/scan-action@49e50b215b647c5ec97abb66f69af73c46a4ca08 # v5.0.1
+        uses: anchore/scan-action@5ed195cc06065322983cae4bb31e2a751feb86fd # v5.2.0
         # Continue whenever container was built (no matter if previous scanner failed)
         if: ${{ always() && steps.build-push-action-temporary-container-registry.outcome == 'success' && ! contains(inputs.container_image_skip_vulnerability_scanners, 'grype')}}
         continue-on-error: ${{ inputs.container_image_skip_vulnerability_checks || false }}
