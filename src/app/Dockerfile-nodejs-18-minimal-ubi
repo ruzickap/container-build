@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/nodejs-18-minimal:1-1732617857
+FROM registry.access.redhat.com/ubi9/nodejs-18-minimal:1-1734512962
 
 USER root
 
